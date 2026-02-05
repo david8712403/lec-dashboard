@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Student {
+  id          String         @id
+  name        String
+  phone       String?
+  birthday    DateTime?
+  gender      String?
+  type        String?
+  default_fee Int?
+  status      String
+  tags        Json
+  created_at  DateTime       @default(now())
+
+  schedules   ScheduleSlot[]
+  sessions    Session[]
+  payments    Payment[]
+  assessments Assessment[]
+}
+
+model ScheduleSlot {
+  id             String    @id
+  student_id     String
+  weekday        Int
+  time_slot      String
+  effective_from DateTime?
+  note           String?
+
+  student        Student   @relation(fields: [student_id], references: [id])
+
+  @@index([student_id])
+}
+
+model Session {
+  id              String   @id
+  student_id      String
+  session_date    DateTime
+  time_slot       String
+  attendance      String
+  teacher_name    String?
+  note            String?
+  performance_log String?
+  pc_summary      String?
+  attachments     Json?
+
+  student         Student  @relation(fields: [student_id], references: [id])
+
+  @@index([student_id])
+  @@index([session_date])
+}
+
+model Payment {
+  id             String   @id
+  student_id     String
+  paid_at        DateTime?
+  amount         Int
+  method         String?
+  status         String
+  invoice_no     String?
+  sessions_count Int?
+  month_ref      String?
+  note           String?
+
+  student        Student  @relation(fields: [student_id], references: [id])
+
+  @@index([student_id])
+}
+
+model Assessment {
+  id             String   @id
+  student_id     String
+  assessed_at    DateTime
+  scoring_system String
+  summary        String?
+  metrics        Json
+
+  student        Student  @relation(fields: [student_id], references: [id])
+
+  @@index([student_id])
+}
+
+model ActivityLog {
+  id          String   @id
+  timestamp   DateTime
+  category    String
+  action      String
+  description String
+  user        String
+
+  @@index([timestamp])
+}
+
+model ChatThread {
+  id         String   @id
+  title      String?
+  status     String   @default("active")
+  session_id String?
+  metadata   Json?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  items      ChatItem[]
+
+  @@index([created_at])
+  @@index([session_id])
+}
+
+model ChatItem {
+  id         String   @id
+  thread_id  String
+  type       String
+  created_at DateTime @default(now())
+  data       Json
+
+  thread     ChatThread @relation(fields: [thread_id], references: [id], onDelete: Cascade)
+
+  @@index([thread_id, created_at])
+}

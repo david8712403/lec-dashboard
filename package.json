@@ -1,22 +1,17 @@
 {
   "name": "lec-dashboard",
   "private": true,
-  "version": "0.0.0",
-  "type": "module",
+  "workspaces": ["web", "server"],
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
-    "@google/genai": "^1.39.0"
+    "dev": "concurrently -n web,server -c blue,green \"npm --workspace web run dev\" \"npm --workspace server run dev\"",
+    "dev:web": "npm --workspace web run dev",
+    "dev:server": "npm --workspace server run dev",
+    "build": "npm --workspace web run build && npm --workspace server run build",
+    "prisma:generate": "npm --workspace server run prisma:generate",
+    "prisma:migrate": "npm --workspace server run prisma:migrate",
+    "prisma:seed": "npm --workspace server run prisma:seed"
   },
   "devDependencies": {
-    "@types/node": "^22.14.0",
-    "@vitejs/plugin-react": "^5.0.0",
-    "typescript": "~5.8.2",
-    "vite": "^6.2.0"
+    "concurrently": "^9.1.2"
   }
 }
