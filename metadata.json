@@ -1,5 +1,7 @@
 {
-  "name": "Copy of CaseManager V1",
-  "description": "A comprehensive student management system for therapy and tutoring, featuring schedule management, payment tracking, and assessment records.",
-  "requestFramePermissions": []
+  "name": "LEC Dashboard",
+  "description": "A comprehensive case management system for educational or therapeutic contexts (LEC).",
+  "requestFramePermissions": [
+    "camera"
+  ]
 }
