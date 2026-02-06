@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Session, Student, AttendanceStatus, ActivityLogEntry } from '../types';
-import { FileTextIcon, CheckCircleIcon, BotIcon, CameraIcon, XIcon, PlusIcon, ChevronLeftIcon } from './Icons';
+import { FileTextIcon, BotIcon, CameraIcon, XIcon, PlusIcon, ChevronLeftIcon } from './Icons';
+import { useToast } from './Toast';
 
 interface DailyLogManagerProps {
   sessions: Session[];
@@ -9,9 +10,17 @@ interface DailyLogManagerProps {
   apiBaseUrl?: string;
   onUpdateSession?: (id: string, payload: Partial<Session>) => Promise<void>;
   onLogActivity?: (category: '課程', action: string, description: string) => void;
+  initialSessionId?: string;
 }
 
-export const DailyLogManager: React.FC<DailyLogManagerProps> = ({ sessions, students, onUpdateSession, onLogActivity }) => {
+export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
+  sessions,
+  students,
+  onUpdateSession,
+  onLogActivity,
+  initialSessionId,
+}) => {
+  const { toast } = useToast();
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3004';
   const initialDate = sessions.length > 0 
     ? sessions.sort((a,b) => b.session_date.localeCompare(a.session_date))[0].session_date 
@@ -21,7 +30,15 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({ sessions, stud
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [editSession, setEditSession] = useState<Session | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const didInitRef = useRef(false);
+  const savingRef = useRef(false);
+  const saveTimerRef = useRef<number | null>(null);
+  const pendingRef = useRef<Partial<Session> | null>(null);
+  const queuedFlushRef = useRef(false);
+  const editSessionRef = useRef<Session | null>(null);
+  const SAVE_DEBOUNCE_MS = 600;
 
   const filteredSessions = useMemo(() => {
     return sessions.filter(s => s.session_date === filterDate);
@@ -37,6 +54,34 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({ sessions, stud
       setEditSession(null);
     }
   }, [selectedSessionId, sessions]);
+  
+  useEffect(() => {
+    editSessionRef.current = editSession;
+  }, [editSession]);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) {
+        window.clearTimeout(saveTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!initialSessionId || didInitRef.current) return;
+    const target = sessions.find((s) => s.id === initialSessionId);
+    if (target) {
+      setFilterDate(target.session_date);
+      setSelectedSessionId(target.id);
+      didInitRef.current = true;
+      setTimeout(() => {
+        const element = document.getElementById(`session-${target.id}`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 120);
+    }
+  }, [initialSessionId, sessions]);
 
   const shiftDate = (days: number) => {
     const d = new Date(filterDate);
@@ -49,25 +94,29 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({ sessions, stud
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
     const fileArray = Array.from(files) as File[];
-    
-    fileArray.forEach(file => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64String = reader.result as string;
-        if (editSession) {
-          const currentAttachments = editSession.attachments || [];
-          setEditSession({
-            ...editSession,
-            attachments: [...currentAttachments, base64String]
-          });
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+    const readAsDataUrl = (file: File) =>
+      new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+
+    try {
+      const base64Files = await Promise.all(fileArray.map(readAsDataUrl));
+      if (editSession) {
+        const currentAttachments = editSession.attachments || [];
+        const nextAttachments = [...currentAttachments, ...base64Files];
+        scheduleSave({ attachments: nextAttachments });
+      }
+    } catch (error) {
+      console.error('Failed to read attachments:', error);
+      toast('附件處理失敗，請稍後再試。', 'error');
+    }
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -75,43 +124,86 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({ sessions, stud
     if (editSession && editSession.attachments) {
       const newAttachments = [...editSession.attachments];
       newAttachments.splice(index, 1);
-      setEditSession({ ...editSession, attachments: newAttachments });
+      scheduleSave({ attachments: newAttachments });
     }
   };
 
-  const handleSave = async () => {
-    if (editSession) {
-      const studentName = getStudent(editSession.student_id)?.name;
-      try {
-        await onUpdateSession?.(editSession.id, {
-          attendance: editSession.attendance,
-          performance_log: editSession.performance_log,
-          pc_summary: editSession.pc_summary,
-          note: editSession.note,
-          attachments: editSession.attachments,
-          teacher_name: editSession.teacher_name,
-          session_date: editSession.session_date,
-          time_slot: editSession.time_slot,
-        });
-        alert(`已儲存 ${studentName} 的紀錄與附件！`);
-      } catch (error) {
-        console.error('Failed to update session:', error);
-        alert('儲存失敗，請稍後再試。');
-        return;
-      }
+  const buildUpdatePayload = (session: Session) => ({
+    attendance: session.attendance,
+    performance_log: session.performance_log,
+    pc_summary: session.pc_summary,
+    note: session.note,
+    attachments: session.attachments,
+    teacher_name: session.teacher_name,
+    session_date: session.session_date,
+    start_time: session.start_time,
+    end_time: session.end_time,
+  });
+
+  const flushSave = async () => {
+    const current = editSessionRef.current;
+    if (!current) return;
+    if (savingRef.current) {
+      queuedFlushRef.current = true;
+      return;
+    }
+
+    const pending = pendingRef.current;
+    pendingRef.current = null;
+
+    savingRef.current = true;
+    setSaveStatus('saving');
+
+    const merged = pending ? { ...current, ...pending } : current;
+    editSessionRef.current = merged;
+    setEditSession(merged);
+
+    try {
+      await onUpdateSession?.(merged.id, buildUpdatePayload(merged));
       if (onLogActivity) {
+        const studentName = getStudent(merged.student_id)?.name;
         onLogActivity(
-          '課程', 
-          '更新課堂紀錄', 
-          `修改了 ${studentName} 在 ${editSession.session_date} (${editSession.time_slot}) 的紀錄。`
+          '課程',
+          '更新課堂紀錄',
+          `修改了 ${studentName} 在 ${merged.session_date} (${merged.start_time}-${merged.end_time}) 的紀錄。`,
         );
       }
+      setSaveStatus('saved');
+      window.setTimeout(() => {
+        setSaveStatus((status) => (status === 'saved' ? 'idle' : status));
+      }, 1000);
+    } catch (error) {
+      console.error('Failed to update session:', error);
+      setSaveStatus('error');
+      toast('儲存失敗，請稍後再試。', 'error');
+    } finally {
+      savingRef.current = false;
+      if (queuedFlushRef.current || pendingRef.current) {
+        queuedFlushRef.current = false;
+        void flushSave();
+      }
     }
+  };
+
+  const scheduleSave = (next?: Partial<Session>) => {
+    if (!editSession) return;
+    const merged = { ...editSession, ...(pendingRef.current ?? {}), ...(next ?? {}) };
+    setEditSession(merged);
+    editSessionRef.current = merged;
+    pendingRef.current = next ? { ...(pendingRef.current ?? {}), ...next } : pendingRef.current;
+    setSaveStatus('saving');
+
+    if (saveTimerRef.current) {
+      window.clearTimeout(saveTimerRef.current);
+    }
+    saveTimerRef.current = window.setTimeout(() => {
+      void flushSave();
+    }, SAVE_DEBOUNCE_MS);
   };
 
   const handleGenerateSummary = async () => {
     if (!editSession || !editSession.performance_log) {
-      alert("請先填寫上課表現紀錄再產出摘要。");
+      toast('請先填寫上課表現紀錄再產出摘要。', 'warning');
       return;
     }
     setIsGenerating(true);
@@ -131,11 +223,12 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({ sessions, stud
 
       const data = await response.json();
       if (data.reply) {
-        updateField('pc_summary', data.reply.trim());
+        const summary = data.reply.trim();
+        scheduleSave({ pc_summary: summary });
       }
     } catch (error) {
       console.error("AI Generation failed:", error);
-      alert("AI 摘要生成失敗。");
+      toast('AI 摘要生成失敗。', 'error');
     } finally {
       setIsGenerating(false);
     }
@@ -199,6 +292,7 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({ sessions, stud
                  return (
                     <div 
                       key={session.id}
+                      id={`session-${session.id}`}
                       onClick={() => setSelectedSessionId(session.id)}
                       className={`p-4 cursor-pointer transition-all hover:bg-indigo-50/30 ${isSelected ? 'bg-indigo-50 border-l-4 border-l-indigo-600' : 'border-l-4 border-l-transparent'}`}
                     >
@@ -212,7 +306,7 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({ sessions, stud
                           </span>
                        </div>
                        <div className="flex items-center gap-2 text-slate-400 font-medium">
-                          <span className="text-[10px] font-mono bg-white border border-slate-100 px-1 rounded">{session.time_slot.split(' ')[0]}</span>
+                          <span className="text-[10px] font-mono bg-white border border-slate-100 px-1 rounded">{session.start_time}</span>
                           <span className="text-[10px] truncate uppercase tracking-tight">{session.teacher_name || '未指派'}</span>
                        </div>
                     </div>
@@ -234,16 +328,25 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({ sessions, stud
                <div className="p-4 border-b flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50">
                   <div>
                      <h2 className="text-lg font-bold text-slate-800">{getStudent(editSession.student_id)?.name} <span className="text-slate-400 font-normal mx-1">/</span> 課堂紀錄</h2>
-                     <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{editSession.session_date} • {editSession.time_slot}</p>
+                     <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{editSession.session_date} • {editSession.start_time}-{editSession.end_time}</p>
                   </div>
-                  <div className="flex gap-2 w-full sm:w-auto">
+                  <div className="flex gap-2 w-full sm:w-auto items-center">
+                     {saveStatus !== 'idle' && (
+                       <span
+                         className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-full border ${
+                           saveStatus === 'saving'
+                             ? 'bg-amber-50 text-amber-700 border-amber-200'
+                             : saveStatus === 'saved'
+                             ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                             : 'bg-red-50 text-red-700 border-red-200'
+                         }`}
+                       >
+                         {saveStatus === 'saving' ? '正在儲存' : saveStatus === 'saved' ? '已儲存' : '儲存失敗'}
+                       </span>
+                     )}
                      <button onClick={handleScanTrigger} className="flex-1 sm:flex-none px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 transition-all flex items-center justify-center gap-2">
                         <CameraIcon className="w-4 h-4" />
                         <span className="sm:inline">掃描附件</span>
-                     </button>
-                     <button onClick={handleSave} className="flex-1 sm:flex-none px-4 py-1.5 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 shadow-sm transition-all flex items-center justify-center gap-2">
-                        <CheckCircleIcon className="w-4 h-4" />
-                        儲存紀錄
                      </button>
                   </div>
                </div>
@@ -259,7 +362,7 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({ sessions, stud
                             ${editSession.attendance === opt.status 
                               ? `${opt.color} text-white border-transparent shadow-sm scale-[1.02]` 
                               : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:bg-slate-50 shadow-sm'}`}
-                          onClick={() => updateField('attendance', opt.status)}
+                          onClick={() => scheduleSave({ attendance: opt.status })}
                         >
                           <div className={`w-2 h-2 rounded-full ${editSession.attendance === opt.status ? 'bg-white' : opt.color}`}></div>
                           {opt.label}
@@ -278,6 +381,7 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({ sessions, stud
                         placeholder="請詳細描述今日個案的表現、學習狀況或情緒反應..."
                         value={editSession.performance_log || ''}
                         onChange={(e) => updateField('performance_log', e.target.value)}
+                        onBlur={() => scheduleSave()}
                      ></textarea>
                   </div>
 
@@ -291,6 +395,7 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({ sessions, stud
                         placeholder="請輸入補課安排、請假原因或其他行政事項..."
                         value={editSession.note || ''}
                         onChange={(e) => updateField('note', e.target.value)}
+                        onBlur={() => scheduleSave()}
                      ></textarea>
                   </div>
 
@@ -339,6 +444,7 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({ sessions, stud
                         placeholder="AI 將根據上方老師的紀錄自動生成摘要..."
                         value={editSession.pc_summary || ''}
                         onChange={(e) => updateField('pc_summary', e.target.value)}
+                        onBlur={() => scheduleSave()}
                      ></textarea>
                   </div>
                </div>

@@ -10,6 +10,11 @@ export class DashboardController {
     return this.dashboardService.getDashboard();
   }
 
+  @Get('dashboard/stats')
+  async getDashboardStats() {
+    return this.dashboardService.getDashboardStats();
+  }
+
   @Post('activity')
   async createActivity(
     @Body()

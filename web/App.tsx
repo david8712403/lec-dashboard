@@ -9,17 +9,27 @@ import { PaymentList } from './components/PaymentList';
 import { DailyLogManager } from './components/DailyLogManager';
 import { ActivityLog } from './components/ActivityLog';
 import { AIAssistant } from './components/AIAssistant';
-import { 
-  UsersIcon, 
-  CalendarIcon, 
-  CreditCardIcon, 
-  MenuIcon, 
+import { ToastProvider, useToast } from './components/Toast';
+import {
+  UsersIcon,
+  CalendarIcon,
+  CreditCardIcon,
+  MenuIcon,
   XIcon,
   FileTextIcon,
   HistoryIcon
 } from './components/Icons';
 
 export default function App() {
+  return (
+    <ToastProvider>
+      <AppInner />
+    </ToastProvider>
+  );
+}
+
+function AppInner() {
+  const { toast } = useToast();
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3004';
   const [view, setView] = useState<ViewState>('SCHEDULE');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -41,17 +51,51 @@ export default function App() {
     try {
       setIsLoading(true);
       setLoadError(null);
-      const response = await fetch(`${apiBaseUrl}/api/dashboard`);
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
+      const [
+        studentsRes,
+        slotsRes,
+        sessionsRes,
+        paymentsRes,
+        assessmentsRes,
+        activitiesRes,
+      ] = await Promise.all([
+        fetch(`${apiBaseUrl}/api/students`),
+        fetch(`${apiBaseUrl}/api/slots`),
+        fetch(`${apiBaseUrl}/api/sessions`),
+        fetch(`${apiBaseUrl}/api/payments`),
+        fetch(`${apiBaseUrl}/api/assessments`),
+        fetch(`${apiBaseUrl}/api/activity`),
+      ]);
+
+      const responses = [
+        studentsRes,
+        slotsRes,
+        sessionsRes,
+        paymentsRes,
+        assessmentsRes,
+        activitiesRes,
+      ];
+
+      const failed = responses.find((res) => !res.ok);
+      if (failed) {
+        throw new Error(`API error: ${failed.status}`);
       }
-      const data = await response.json();
-      setStudents(data.students ?? []);
-      setSlots(data.slots ?? []);
-      setSessions(data.sessions ?? []);
-      setPayments(data.payments ?? []);
-      setAssessments(data.assessments ?? []);
-      setActivities(data.activities ?? []);
+
+      const [
+        studentsData,
+        slotsData,
+        sessionsData,
+        paymentsData,
+        assessmentsData,
+        activitiesData,
+      ] = await Promise.all(responses.map((res) => res.json()));
+
+      setStudents(studentsData ?? []);
+      setSlots(slotsData ?? []);
+      setSessions(sessionsData ?? []);
+      setPayments(paymentsData ?? []);
+      setAssessments(assessmentsData ?? []);
+      setActivities(activitiesData ?? []);
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
       setLoadError('無法連線到後端，請確認伺服器狀態。');
@@ -59,6 +103,13 @@ export default function App() {
       setIsLoading(false);
       isFetchingRef.current = false;
     }
+  }, [apiBaseUrl]);
+
+  const reloadPaymentsOnly = useCallback(async () => {
+    const response = await fetch(`${apiBaseUrl}/api/payments`);
+    if (!response.ok) return;
+    const data = await response.json();
+    setPayments(data ?? []);
   }, [apiBaseUrl]);
 
   useEffect(() => {
@@ -196,6 +247,11 @@ export default function App() {
     await loadDashboard();
   };
 
+  const deleteSession = async (id: string) => {
+    await fetch(`${apiBaseUrl}/api/sessions/${id}`, { method: 'DELETE' });
+    await loadDashboard();
+  };
+
   const NavItem = ({ target, icon: Icon, label }: { target: ViewState, icon: any, label: string }) => (
     <button
       onClick={() => {
@@ -317,27 +373,37 @@ export default function App() {
               slots={slots}
               sessions={sessions}
               students={students}
-              onAddSession={async (date, time) => {
-                const existing = sessions.find(
-                  (s) => s.session_date === date && s.time_slot === time,
-                );
-                if (existing) {
-                  return;
-                }
+              onDeleteSession={async (session) => {
+                const confirmed = window.confirm(`確定要刪除 ${session.session_date} ${session.start_time}-${session.end_time} 的課程嗎？`);
+                if (!confirmed) return;
+                await deleteSession(session.id);
+              }}
+              onAddSession={async (date, time, slotFromCell) => {
                 const dayOfWeek = new Date(date).getDay();
                 const weekday = dayOfWeek === 0 ? 7 : dayOfWeek;
-                const slot = slots.find((s) => s.weekday === weekday && s.time_slot === time);
+                const slot = slotFromCell ?? slots.find((s) => s.weekday === weekday && s.start_time === time.start_time && s.end_time === time.end_time);
                 if (!slot) {
-                  alert('請先為此時段建立固定排課。');
+                  toast('請先為此時段建立固定排課。', 'warning');
+                  return;
+                }
+                const existing = sessions.find(
+                  (s) =>
+                    s.session_date === date &&
+                    s.start_time === time.start_time &&
+                    s.end_time === time.end_time &&
+                    s.student_id === slot.student_id,
+                );
+                if (existing) {
                   return;
                 }
                 await createSession({
                   student_id: slot.student_id,
                   session_date: date,
-                  time_slot: time,
+                  start_time: time.start_time,
+                  end_time: time.end_time,
                   attendance: AttendanceStatus.UNKNOWN,
                 });
-                logActivity('課程', '預排課程', `在 ${date} ${time} 預排了一堂課程。`);
+                logActivity('課程', '預排課程', `在 ${date} ${time.start_time} - ${time.end_time} 預排了一堂課程。`);
               }}
             />
           )}
@@ -346,10 +412,12 @@ export default function App() {
             <PaymentList 
               payments={payments} 
               students={students} 
+              assessments={assessments}
               apiBaseUrl={apiBaseUrl}
               onCreatePayment={createPayment}
               onUpdatePayment={updatePayment}
               onDeletePayment={deletePayment}
+              onReload={reloadPaymentsOnly}
               onLogActivity={(action, desc) => logActivity('繳費', action, desc)}
             />
           )}

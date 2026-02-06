@@ -1,5 +1,7 @@
 import './globals.css';
 import Script from 'next/script';
+import { ToastProvider } from '@/components/Toast';
+import { AppShell } from '@/components/AppShell';
 
 export const metadata = {
   title: 'LEC Dashboard',
@@ -19,8 +21,10 @@ export default function RootLayout({
           strategy="beforeInteractive"
         />
       </head>
-      <body className="bg-slate-50 text-slate-900 antialiased">
-        {children}
+      <body className="bg-slate-100 text-slate-900 antialiased">
+        <ToastProvider>
+          <AppShell>{children}</AppShell>
+        </ToastProvider>
       </body>
     </html>
   );

@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "mcp__plugin_Notion_notion__notion-search",
+      "mcp__plugin_Notion_notion__notion-fetch",
+      "Bash(npm run prisma:migrate:*)",
+      "Bash(npm --workspace server run prisma:migrate)",
+      "Bash(pkill:*)",
+      "Bash(npx:*)",
+      "Bash(npm run prisma:seed:*)",
+      "Bash(npm run dev:*)",
+      "Bash(sqlite3:*)",
+      "Bash(npm install:*)",
+      "Bash(node prisma/import-from-notion.js:*)",
+      "Bash(node:*)",
+      "Bash(prisma/check-assessment-fields.js << 'EOF'\nrequire\\('dotenv'\\).config\\({ path: require\\('path'\\).resolve\\(__dirname, '../.env'\\) }\\);\nconst { Client } = require\\('@notionhq/client'\\);\n\nconst notion = new Client\\({ auth: process.env.NOTION_API_KEY }\\);\n\nasync function test\\(\\) {\n  try {\n    const response = await notion.dataSources.query\\({\n      data_source_id: '288c93f2-5b7f-817b-8257-000bd8caa217',\n      page_size: 1,\n    }\\);\n\n    if \\(response.results.length > 0\\) {\n      const first = response.results[0];\n      console.log\\('所有欄位:'\\);\n      Object.keys\\(first.properties\\).forEach\\(key => {\n        const prop = first.properties[key];\n        console.log\\(`- ${key}: ${prop.type}`\\);\n      }\\);\n      \n      // 查看是否有評估文字或備註相關欄位\n      console.log\\('\\\\n其他課程說明:'\\);\n      console.log\\(JSON.stringify\\(first.properties['其他課程說明'], null, 2\\)\\);\n    }\n  } catch \\(error\\) {\n    console.error\\('Error:', error.message\\);\n  }\n}\n\ntest\\(\\);\nEOF)",
+      "Bash(while read line)",
+      "Bash(do echo \"$line\")",
+      "Bash(done)",
+      "Bash(curl:*)",
+      "Bash(python3:*)",
+      "Bash(column:*)"
+    ]
+  }
+}

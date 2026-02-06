@@ -1,7 +1,10 @@
 {
   "name": "lec-dashboard",
   "private": true,
-  "workspaces": ["web", "server"],
+  "workspaces": [
+    "web",
+    "server"
+  ],
   "scripts": {
     "dev": "concurrently -n web,server -c blue,green \"npm --workspace web run dev\" \"npm --workspace server run dev\"",
     "dev:web": "npm --workspace web run dev",
@@ -13,5 +16,8 @@
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
+  },
+  "dependencies": {
+    "@notionhq/client": "^5.9.0"
   }
 }

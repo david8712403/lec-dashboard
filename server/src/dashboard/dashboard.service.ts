@@ -44,11 +44,80 @@ export class DashboardService {
       assessments: assessments.map((assessment) => ({
         ...assessment,
         assessed_at: formatDate(assessment.assessed_at),
-        metrics: assessment.metrics ?? {},
+        metrics: typeof assessment.metrics === 'string'
+          ? JSON.parse(assessment.metrics)
+          : (assessment.metrics ?? {}),
       })),
       activities: activities.map((activity) => ({
         ...activity,
         timestamp: formatDateTime(activity.timestamp),
+      })),
+    };
+  }
+
+  async getDashboardStats() {
+    const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+
+    const [activeStudents, testingInProgress, unpaidCurrentMonth, assessmentsForStars] =
+      await Promise.all([
+        this.prisma.student.count({ where: { status: '進行中' } }),
+        this.prisma.assessment.findMany({
+          where: { status: { in: ['未測驗', '分析中', '待諮詢'] } },
+          include: { student: true },
+          orderBy: { assessed_at: 'desc' },
+        }),
+        this.prisma.payment.findMany({
+          where: {
+            status: '未繳',
+            month_ref: { startsWith: currentMonth },
+          },
+          include: { student: true },
+        }),
+        this.prisma.assessment.findMany({
+          select: { metrics: true },
+        }),
+      ]);
+
+    const totalStars = assessmentsForStars.reduce((sum, assessment) => {
+      const metrics = typeof assessment.metrics === 'string'
+        ? (() => {
+            try {
+              return JSON.parse(assessment.metrics);
+            } catch {
+              return {};
+            }
+          })()
+        : (assessment.metrics ?? {});
+      const value = (metrics as { stars?: unknown }).stars;
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? sum + numeric : sum;
+    }, 0);
+
+    return {
+      totalStars,
+      activeStudents,
+      testingInProgress: testingInProgress.map((assessment) => ({
+        ...assessment,
+        assessed_at: formatDate(assessment.assessed_at),
+        metrics: typeof assessment.metrics === 'string'
+          ? JSON.parse(assessment.metrics)
+          : (assessment.metrics ?? {}),
+        student: {
+          ...assessment.student,
+          birthday: formatDate(assessment.student.birthday),
+          created_at: formatDate(assessment.student.created_at),
+          tags: Array.isArray(assessment.student.tags) ? assessment.student.tags : [],
+        },
+      })),
+      unpaidCurrentMonth: unpaidCurrentMonth.map((payment) => ({
+        ...payment,
+        paid_at: formatDate(payment.paid_at),
+        student: {
+          ...payment.student,
+          birthday: formatDate(payment.student.birthday),
+          created_at: formatDate(payment.student.created_at),
+          tags: Array.isArray(payment.student.tags) ? payment.student.tags : [],
+        },
       })),
     };
   }

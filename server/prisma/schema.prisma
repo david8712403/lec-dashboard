@@ -14,6 +14,8 @@ model Student {
   birthday    DateTime?
   gender      String?
   type        String?
+  course_type String?
+  grade       String?
   default_fee Int?
   status      String
   tags        Json
@@ -29,7 +31,8 @@ model ScheduleSlot {
   id             String    @id
   student_id     String
   weekday        Int
-  time_slot      String
+  start_time     String
+  end_time       String
   effective_from DateTime?
   note           String?
 
@@ -42,7 +45,8 @@ model Session {
   id              String   @id
   student_id      String
   session_date    DateTime
-  time_slot       String
+  start_time      String
+  end_time        String
   attendance      String
   teacher_name    String?
   note            String?
@@ -63,6 +67,7 @@ model Payment {
   amount         Int
   method         String?
   status         String
+  invoice_status String?
   invoice_no     String?
   sessions_count Int?
   month_ref      String?
@@ -79,11 +84,15 @@ model Assessment {
   assessed_at    DateTime
   scoring_system String
   summary        String?
+  status         String?
+  stars          Int      @default(0)
   metrics        Json
 
   student        Student  @relation(fields: [student_id], references: [id])
 
   @@index([student_id])
+  @@index([student_id, assessed_at])
+  @@index([stars])
 }
 
 model ActivityLog {

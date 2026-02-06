@@ -55,6 +55,11 @@ export class DataController {
     return this.dataService.createSession(payload);
   }
 
+  @Post('sessions/bulk-week')
+  createSessionsForWeek(@Body() payload: any) {
+    return this.dataService.createSessionsForWeek(payload);
+  }
+
   @Patch('sessions/:id')
   updateSession(@Param('id') id: string, @Body() payload: any) {
     return this.dataService.updateSession(id, payload);
@@ -88,6 +93,11 @@ export class DataController {
   @Get('assessments')
   listAssessments() {
     return this.dataService.listAssessments();
+  }
+
+  @Get('activity')
+  listActivities() {
+    return this.dataService.listActivities();
   }
 
   @Post('assessments')

@@ -12,7 +12,17 @@ export const ActivityLog: React.FC<ActivityLogProps> = ({ activities }) => {
   const formatTimestamp = (value: string) => {
     if (!value) return '';
     if (value.includes('T')) {
-      return value.replace('T', ' ').split('.')[0];
+      const date = new Date(value);
+      if (isNaN(date.getTime())) return value.replace('T', ' ').split('.')[0];
+      return new Intl.DateTimeFormat(undefined, {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      }).format(date);
     }
     return value;
   };
@@ -37,14 +47,6 @@ export const ActivityLog: React.FC<ActivityLogProps> = ({ activities }) => {
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 h-full flex flex-col overflow-hidden">
-      <div className="p-4 border-b flex justify-between items-center bg-slate-50/50">
-        <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-          <HistoryIcon className="w-5 h-5 text-indigo-600" />
-          活動紀錄
-        </h2>
-        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest bg-white border border-slate-100 px-3 py-1 rounded-full">系統異動歷程</span>
-      </div>
-
       <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-50/20">
         {sortedActivities.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center opacity-40 text-center">
