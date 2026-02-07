@@ -53,10 +53,6 @@ export function AppShell({ children }: { children: ReactNode }) {
     return item?.label ?? 'LEC Dashboard';
   }, [pathname]);
 
-  if (pathname === '/login') {
-    return <>{children}</>;
-  }
-
   const handleLogout = async () => {
     try {
       await fetch(`${API_BASE_URL}/api/auth/logout`, {
@@ -105,6 +101,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     };
     void loadUser();
   }, [pathname]);
+
+  if (pathname === '/login') {
+    return <>{children}</>;
+  }
 
   const handleProfileSave = async () => {
     const nextName = displayNameDraft.trim();
