@@ -1,10 +1,11 @@
 generator client {
   provider = "prisma-client-js"
+  output   = "./generated/sqlite"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "sqlite"
+  url      = env("SQLITE_DATABASE_URL")
 }
 
 model Student {
@@ -102,10 +103,8 @@ model ActivityLog {
   action      String
   description String
   user        String
-  line_uid    String?
 
   @@index([timestamp])
-  @@index([line_uid])
 }
 
 model ChatThread {
@@ -138,9 +137,7 @@ model ChatItem {
 model LineUser {
   id             String   @id @default(uuid())
   line_uid       String   @unique
-  display_name   String? // legacy
-  line_display_name   String?
-  system_display_name String?
+  display_name   String?
   picture_url    String?
   status_message String?
   email          String?

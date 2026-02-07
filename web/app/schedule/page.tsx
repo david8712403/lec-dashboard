@@ -114,6 +114,7 @@ export default function SchedulePage() {
                       week_start: formatLocalDate(weekStart),
                       tz_offset: new Date().getTimezoneOffset(),
                     }),
+                    credentials: 'include',
                   });
                   if (!response.ok) {
                     throw new Error(`API error: ${response.status}`);

@@ -2,9 +2,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChatKit, useChatKit } from '@openai/chatkit-react';
 import { BotIcon, XIcon, MessageCircleIcon } from './Icons';
+import { API_BASE_URL } from '@/hooks/useDashboardData';
 
 export const AIAssistant: React.FC = () => {
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3004';
+  const apiBaseUrl = API_BASE_URL;
   const [isOpen, setIsOpen] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const widgetRef = useRef<HTMLDivElement>(null);
@@ -29,7 +30,7 @@ export const AIAssistant: React.FC = () => {
         if (sessionId) {
           headers.set('x-chatkit-session', sessionId);
         }
-        return fetch(input, { ...init, headers });
+        return fetch(input, { ...init, headers, credentials: 'include' });
       },
     },
     header: {

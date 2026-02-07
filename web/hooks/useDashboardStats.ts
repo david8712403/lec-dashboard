@@ -32,7 +32,9 @@ export function useDashboardStats() {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(`${apiBaseUrl}/api/dashboard/stats`);
+      const response = await fetch(`${apiBaseUrl}/api/dashboard/stats`, {
+        credentials: 'include',
+      });
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
       }

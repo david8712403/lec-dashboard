@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Session, Student, AttendanceStatus, ActivityLogEntry } from '../types';
 import { FileTextIcon, BotIcon, CameraIcon, XIcon, PlusIcon, ChevronLeftIcon } from './Icons';
 import { useToast } from './Toast';
+import { API_BASE_URL } from '@/hooks/useDashboardData';
 
 interface DailyLogManagerProps {
   sessions: Session[];
@@ -21,7 +22,7 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
   initialSessionId,
 }) => {
   const { toast } = useToast();
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3004';
+  const apiBaseUrl = API_BASE_URL;
   const initialDate = sessions.length > 0 
     ? sessions.sort((a,b) => b.session_date.localeCompare(a.session_date))[0].session_date 
     : new Date().toISOString().split('T')[0];
@@ -215,6 +216,7 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
           message: `請根據以下特教課程的上課表現紀錄，產出一段專業的 PC 個案摘要，用於與家長或保母討論。\\n摘要應簡潔（約 100-200 字）、中肯，並包含今日觀察到的進步、待加強處以及具體的居家練習建議：\\n\\n上課表現紀錄：\\n${editSession.performance_log}`,
           history: [],
         }),
+        credentials: 'include',
       });
 
       if (!response.ok) {

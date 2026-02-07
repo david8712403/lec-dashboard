@@ -1,12 +1,13 @@
 'use client'
 
+import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { DailyLogManager } from '@/components/DailyLogManager';
 import { useStudents } from '@/hooks/useStudents';
 import { useSessions } from '@/hooks/useSessions';
 import { useActivityLogger } from '@/hooks/useActivityLogger';
 
-export default function DailyLogsPage() {
+function DailyLogsContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('sessionId');
   const { students, loading: studentsLoading, error: studentsError } = useStudents();
@@ -40,5 +41,19 @@ export default function DailyLogsPage() {
         initialSessionId={sessionId || undefined}
       />
     </div>
+  );
+}
+
+export default function DailyLogsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center h-full">
+          <div className="text-lg text-gray-600">載入中...</div>
+        </div>
+      }
+    >
+      <DailyLogsContent />
+    </Suspense>
   );
 }

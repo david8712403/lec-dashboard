@@ -1,10 +1,11 @@
 'use client'
 
 import type { ComponentType, ReactNode } from 'react';
-import { useMemo, useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AIAssistant } from './AIAssistant';
+import { API_BASE_URL } from '@/hooks/useDashboardData';
 import {
   CalendarIcon,
   CreditCardIcon,
@@ -33,7 +34,11 @@ const navItems: NavItem[] = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [currentUser, setCurrentUser] = useState<{ name?: string; picture?: string } | null>(null);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [displayNameDraft, setDisplayNameDraft] = useState('');
 
   const isActive = (href: string) => {
     if (href === '/') {
@@ -47,6 +52,79 @@ export function AppShell({ children }: { children: ReactNode }) {
     const item = navItems.find((nav) => nav.href !== '/' && pathname.startsWith(nav.href));
     return item?.label ?? 'LEC Dashboard';
   }, [pathname]);
+
+  if (pathname === '/login') {
+    return <>{children}</>;
+  }
+
+  const handleLogout = async () => {
+    try {
+      await fetch(`${API_BASE_URL}/api/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch (error) {
+      console.warn('Failed to logout:', error);
+    }
+
+    try {
+      const liffId = process.env.NEXT_PUBLIC_LIFF_ID ?? '';
+      if (liffId) {
+        const liff = (await import('@line/liff')).default;
+        await liff.init({ liffId });
+        if (liff.isLoggedIn()) {
+          liff.logout();
+        }
+      }
+    } catch (error) {
+      console.warn('LIFF logout failed:', error);
+    } finally {
+      router.replace('/login');
+    }
+  };
+
+  useEffect(() => {
+    if (pathname === '/login') return;
+    const loadUser = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+          credentials: 'include',
+        });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (data?.user) {
+          setCurrentUser({
+            name: data.user.name ?? '',
+            picture: data.user.picture ?? '',
+          });
+          setDisplayNameDraft(data.user.name ?? '');
+        }
+      } catch (error) {
+        console.warn('Failed to load current user:', error);
+      }
+    };
+    void loadUser();
+  }, [pathname]);
+
+  const handleProfileSave = async () => {
+    const nextName = displayNameDraft.trim();
+    if (!nextName) return;
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/profile`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ display_name: nextName }),
+      });
+      if (!response.ok) {
+        throw new Error('更新失敗');
+      }
+      setCurrentUser((prev) => (prev ? { ...prev, name: nextName } : { name: nextName }));
+      setIsEditingProfile(false);
+    } catch (error) {
+      console.warn('Failed to update profile:', error);
+    }
+  };
 
   return (
     <div className="flex h-screen bg-slate-100 overflow-hidden font-sans">
@@ -117,9 +195,34 @@ export function AppShell({ children }: { children: ReactNode }) {
             <h2 className="text-lg font-bold text-slate-700">{title}</h2>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-xs">
-              T
-            </div>
+            {currentUser?.name && (
+              <span className="text-sm font-semibold text-slate-600 hidden sm:inline">
+                {currentUser.name}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => setIsEditingProfile(true)}
+              className="rounded-full border border-transparent hover:border-slate-200 transition-all"
+            >
+              {currentUser?.picture ? (
+                <img
+                  src={currentUser.picture}
+                  alt={currentUser?.name ?? 'User'}
+                  className="w-8 h-8 rounded-full object-cover border border-slate-200"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-xs">
+                  {currentUser?.name?.slice(0, 1) || 'U'}
+                </div>
+              )}
+            </button>
+            <button
+              onClick={handleLogout}
+              className="px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-200 text-slate-600 bg-white hover:bg-slate-50 transition-all"
+            >
+              登出
+            </button>
           </div>
         </header>
 
@@ -127,6 +230,37 @@ export function AppShell({ children }: { children: ReactNode }) {
       </main>
 
       <AIAssistant />
+
+      {isEditingProfile && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 px-4">
+          <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl border border-slate-200 p-6 space-y-4">
+            <div className="space-y-1">
+              <h3 className="text-lg font-bold text-slate-800">編輯顯示名稱</h3>
+              <p className="text-xs text-slate-500">活動紀錄與頭像將以此名稱顯示</p>
+            </div>
+            <input
+              value={displayNameDraft}
+              onChange={(e) => setDisplayNameDraft(e.target.value)}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+              placeholder="請輸入顯示名稱"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setIsEditingProfile(false)}
+                className="px-3 py-1.5 text-sm rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleProfileSave}
+                className="px-3 py-1.5 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
+              >
+                儲存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

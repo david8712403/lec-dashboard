@@ -22,6 +22,7 @@ export function useSessions() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+      credentials: 'include',
     });
     if (!response.ok) {
       await reload();
@@ -36,6 +37,7 @@ export function useSessions() {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+      credentials: 'include',
     });
     if (!response.ok) {
       await reload();
@@ -49,7 +51,10 @@ export function useSessions() {
   };
 
   const deleteSession = async (id: string) => {
-    const response = await fetch(`${API_BASE_URL}/api/sessions/${id}`, { method: 'DELETE' });
+    const response = await fetch(`${API_BASE_URL}/api/sessions/${id}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    });
     if (!response.ok) {
       await reload();
       return;

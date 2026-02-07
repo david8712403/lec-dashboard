@@ -30,7 +30,9 @@ export default function App() {
 
 function AppInner() {
   const { toast } = useToast();
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3004';
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? '';
+  const fetchWithAuth = (input: RequestInfo | URL, init?: RequestInit) =>
+    fetch(input, { ...init, credentials: 'include' });
   const [view, setView] = useState<ViewState>('SCHEDULE');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
@@ -59,12 +61,12 @@ function AppInner() {
         assessmentsRes,
         activitiesRes,
       ] = await Promise.all([
-        fetch(`${apiBaseUrl}/api/students`),
-        fetch(`${apiBaseUrl}/api/slots`),
-        fetch(`${apiBaseUrl}/api/sessions`),
-        fetch(`${apiBaseUrl}/api/payments`),
-        fetch(`${apiBaseUrl}/api/assessments`),
-        fetch(`${apiBaseUrl}/api/activity`),
+        fetchWithAuth(`${apiBaseUrl}/api/students`),
+        fetchWithAuth(`${apiBaseUrl}/api/slots`),
+        fetchWithAuth(`${apiBaseUrl}/api/sessions`),
+        fetchWithAuth(`${apiBaseUrl}/api/payments`),
+        fetchWithAuth(`${apiBaseUrl}/api/assessments`),
+        fetchWithAuth(`${apiBaseUrl}/api/activity`),
       ]);
 
       const responses = [
@@ -95,7 +97,7 @@ function AppInner() {
       setSessions(sessionsData ?? []);
       setPayments(paymentsData ?? []);
       setAssessments(assessmentsData ?? []);
-      setActivities(activitiesData ?? []);
+      setActivities(Array.isArray(activitiesData) ? activitiesData : activitiesData?.items ?? []);
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
       setLoadError('無法連線到後端，請確認伺服器狀態。');
@@ -106,7 +108,7 @@ function AppInner() {
   }, [apiBaseUrl]);
 
   const reloadPaymentsOnly = useCallback(async () => {
-    const response = await fetch(`${apiBaseUrl}/api/payments`);
+    const response = await fetchWithAuth(`${apiBaseUrl}/api/payments`);
     if (!response.ok) return;
     const data = await response.json();
     setPayments(data ?? []);
@@ -128,7 +130,7 @@ function AppInner() {
       user: 'Teacher T'
     };
     setActivities(prev => [newLog, ...prev]);
-    void fetch(`${apiBaseUrl}/api/activity`, {
+    void fetchWithAuth(`${apiBaseUrl}/api/activity`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newLog),
@@ -138,7 +140,7 @@ function AppInner() {
   };
 
   const createStudent = async (payload: Partial<Student>) => {
-    await fetch(`${apiBaseUrl}/api/students`, {
+    await fetchWithAuth(`${apiBaseUrl}/api/students`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -147,7 +149,7 @@ function AppInner() {
   };
 
   const updateStudent = async (id: string, payload: Partial<Student>) => {
-    await fetch(`${apiBaseUrl}/api/students/${id}`, {
+    await fetchWithAuth(`${apiBaseUrl}/api/students/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -156,12 +158,12 @@ function AppInner() {
   };
 
   const deleteStudent = async (id: string) => {
-    await fetch(`${apiBaseUrl}/api/students/${id}`, { method: 'DELETE' });
+    await fetchWithAuth(`${apiBaseUrl}/api/students/${id}`, { method: 'DELETE' });
     await loadDashboard();
   };
 
   const createSlot = async (payload: Partial<ScheduleSlot>) => {
-    await fetch(`${apiBaseUrl}/api/slots`, {
+    await fetchWithAuth(`${apiBaseUrl}/api/slots`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -170,7 +172,7 @@ function AppInner() {
   };
 
   const updateSlot = async (id: string, payload: Partial<ScheduleSlot>) => {
-    await fetch(`${apiBaseUrl}/api/slots/${id}`, {
+    await fetchWithAuth(`${apiBaseUrl}/api/slots/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -179,12 +181,12 @@ function AppInner() {
   };
 
   const deleteSlot = async (id: string) => {
-    await fetch(`${apiBaseUrl}/api/slots/${id}`, { method: 'DELETE' });
+    await fetchWithAuth(`${apiBaseUrl}/api/slots/${id}`, { method: 'DELETE' });
     await loadDashboard();
   };
 
   const createPayment = async (payload: Partial<Payment>) => {
-    await fetch(`${apiBaseUrl}/api/payments`, {
+    await fetchWithAuth(`${apiBaseUrl}/api/payments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -193,7 +195,7 @@ function AppInner() {
   };
 
   const updatePayment = async (id: string, payload: Partial<Payment>) => {
-    await fetch(`${apiBaseUrl}/api/payments/${id}`, {
+    await fetchWithAuth(`${apiBaseUrl}/api/payments/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -202,12 +204,12 @@ function AppInner() {
   };
 
   const deletePayment = async (id: string) => {
-    await fetch(`${apiBaseUrl}/api/payments/${id}`, { method: 'DELETE' });
+    await fetchWithAuth(`${apiBaseUrl}/api/payments/${id}`, { method: 'DELETE' });
     await loadDashboard();
   };
 
   const createAssessment = async (payload: Partial<Assessment>) => {
-    await fetch(`${apiBaseUrl}/api/assessments`, {
+    await fetchWithAuth(`${apiBaseUrl}/api/assessments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -216,7 +218,7 @@ function AppInner() {
   };
 
   const updateAssessment = async (id: string, payload: Partial<Assessment>) => {
-    await fetch(`${apiBaseUrl}/api/assessments/${id}`, {
+    await fetchWithAuth(`${apiBaseUrl}/api/assessments/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -225,12 +227,12 @@ function AppInner() {
   };
 
   const deleteAssessment = async (id: string) => {
-    await fetch(`${apiBaseUrl}/api/assessments/${id}`, { method: 'DELETE' });
+    await fetchWithAuth(`${apiBaseUrl}/api/assessments/${id}`, { method: 'DELETE' });
     await loadDashboard();
   };
 
   const createSession = async (payload: Partial<Session>) => {
-    await fetch(`${apiBaseUrl}/api/sessions`, {
+    await fetchWithAuth(`${apiBaseUrl}/api/sessions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -239,7 +241,7 @@ function AppInner() {
   };
 
   const updateSession = async (id: string, payload: Partial<Session>) => {
-    await fetch(`${apiBaseUrl}/api/sessions/${id}`, {
+    await fetchWithAuth(`${apiBaseUrl}/api/sessions/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -248,7 +250,7 @@ function AppInner() {
   };
 
   const deleteSession = async (id: string) => {
-    await fetch(`${apiBaseUrl}/api/sessions/${id}`, { method: 'DELETE' });
+    await fetchWithAuth(`${apiBaseUrl}/api/sessions/${id}`, { method: 'DELETE' });
     await loadDashboard();
   };
 

@@ -166,6 +166,9 @@ export interface ActivityLogEntry {
   action: string;
   description: string;
   user: string;
+  line_uid?: string | null;
+  user_picture?: string | null;
+  user_display_name?: string | null;
 }
 
 // UI State Types

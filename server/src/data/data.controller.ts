@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import type { FastifyRequest } from 'fastify';
 import { DataService } from './data.service';
 
 @Controller()
@@ -11,18 +12,18 @@ export class DataController {
   }
 
   @Post('students')
-  createStudent(@Body() payload: any) {
-    return this.dataService.createStudent(payload);
+  createStudent(@Req() request: FastifyRequest, @Body() payload: any) {
+    return this.dataService.createStudent(payload, (request as any)?.user);
   }
 
   @Patch('students/:id')
-  updateStudent(@Param('id') id: string, @Body() payload: any) {
-    return this.dataService.updateStudent(id, payload);
+  updateStudent(@Req() request: FastifyRequest, @Param('id') id: string, @Body() payload: any) {
+    return this.dataService.updateStudent(id, payload, (request as any)?.user);
   }
 
   @Delete('students/:id')
-  deleteStudent(@Param('id') id: string) {
-    return this.dataService.deleteStudent(id);
+  deleteStudent(@Req() request: FastifyRequest, @Param('id') id: string) {
+    return this.dataService.deleteStudent(id, (request as any)?.user);
   }
 
   @Get('slots')
@@ -31,18 +32,18 @@ export class DataController {
   }
 
   @Post('slots')
-  createSlot(@Body() payload: any) {
-    return this.dataService.createSlot(payload);
+  createSlot(@Req() request: FastifyRequest, @Body() payload: any) {
+    return this.dataService.createSlot(payload, (request as any)?.user);
   }
 
   @Patch('slots/:id')
-  updateSlot(@Param('id') id: string, @Body() payload: any) {
-    return this.dataService.updateSlot(id, payload);
+  updateSlot(@Req() request: FastifyRequest, @Param('id') id: string, @Body() payload: any) {
+    return this.dataService.updateSlot(id, payload, (request as any)?.user);
   }
 
   @Delete('slots/:id')
-  deleteSlot(@Param('id') id: string) {
-    return this.dataService.deleteSlot(id);
+  deleteSlot(@Req() request: FastifyRequest, @Param('id') id: string) {
+    return this.dataService.deleteSlot(id, (request as any)?.user);
   }
 
   @Get('sessions')
@@ -51,23 +52,23 @@ export class DataController {
   }
 
   @Post('sessions')
-  createSession(@Body() payload: any) {
-    return this.dataService.createSession(payload);
+  createSession(@Req() request: FastifyRequest, @Body() payload: any) {
+    return this.dataService.createSession(payload, (request as any)?.user);
   }
 
   @Post('sessions/bulk-week')
-  createSessionsForWeek(@Body() payload: any) {
-    return this.dataService.createSessionsForWeek(payload);
+  createSessionsForWeek(@Req() request: FastifyRequest, @Body() payload: any) {
+    return this.dataService.createSessionsForWeek(payload, (request as any)?.user);
   }
 
   @Patch('sessions/:id')
-  updateSession(@Param('id') id: string, @Body() payload: any) {
-    return this.dataService.updateSession(id, payload);
+  updateSession(@Req() request: FastifyRequest, @Param('id') id: string, @Body() payload: any) {
+    return this.dataService.updateSession(id, payload, (request as any)?.user);
   }
 
   @Delete('sessions/:id')
-  deleteSession(@Param('id') id: string) {
-    return this.dataService.deleteSession(id);
+  deleteSession(@Req() request: FastifyRequest, @Param('id') id: string) {
+    return this.dataService.deleteSession(id, (request as any)?.user);
   }
 
   @Get('payments')
@@ -76,18 +77,18 @@ export class DataController {
   }
 
   @Post('payments')
-  createPayment(@Body() payload: any) {
-    return this.dataService.createPayment(payload);
+  createPayment(@Req() request: FastifyRequest, @Body() payload: any) {
+    return this.dataService.createPayment(payload, (request as any)?.user);
   }
 
   @Patch('payments/:id')
-  updatePayment(@Param('id') id: string, @Body() payload: any) {
-    return this.dataService.updatePayment(id, payload);
+  updatePayment(@Req() request: FastifyRequest, @Param('id') id: string, @Body() payload: any) {
+    return this.dataService.updatePayment(id, payload, (request as any)?.user);
   }
 
   @Delete('payments/:id')
-  deletePayment(@Param('id') id: string) {
-    return this.dataService.deletePayment(id);
+  deletePayment(@Req() request: FastifyRequest, @Param('id') id: string) {
+    return this.dataService.deletePayment(id, (request as any)?.user);
   }
 
   @Get('assessments')
@@ -96,22 +97,48 @@ export class DataController {
   }
 
   @Get('activity')
-  listActivities() {
-    return this.dataService.listActivities();
+  listActivities(
+    @Query()
+    query: {
+      page?: string;
+      pageSize?: string;
+      start_date?: string;
+      end_date?: string;
+      user?: string;
+      line_uid?: string;
+      line_uids?: string;
+      users?: string;
+    },
+  ) {
+    return this.dataService.listActivities({
+      page: query.page ? Number(query.page) : undefined,
+      pageSize: query.pageSize ? Number(query.pageSize) : undefined,
+      start_date: query.start_date,
+      end_date: query.end_date,
+      user: query.user,
+      line_uid: query.line_uid,
+      line_uids: query.line_uids,
+      users: query.users,
+    });
+  }
+
+  @Get('activity/operators')
+  listActivityOperators() {
+    return this.dataService.listActivityOperators();
   }
 
   @Post('assessments')
-  createAssessment(@Body() payload: any) {
-    return this.dataService.createAssessment(payload);
+  createAssessment(@Req() request: FastifyRequest, @Body() payload: any) {
+    return this.dataService.createAssessment(payload, (request as any)?.user);
   }
 
   @Patch('assessments/:id')
-  updateAssessment(@Param('id') id: string, @Body() payload: any) {
-    return this.dataService.updateAssessment(id, payload);
+  updateAssessment(@Req() request: FastifyRequest, @Param('id') id: string, @Body() payload: any) {
+    return this.dataService.updateAssessment(id, payload, (request as any)?.user);
   }
 
   @Delete('assessments/:id')
-  deleteAssessment(@Param('id') id: string) {
-    return this.dataService.deleteAssessment(id);
+  deleteAssessment(@Req() request: FastifyRequest, @Param('id') id: string) {
+    return this.dataService.deleteAssessment(id, (request as any)?.user);
   }
 }

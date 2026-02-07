@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Post, Req } from '@nestjs/common';
+import type { FastifyRequest } from 'fastify';
 import { DashboardService } from './dashboard.service';
 
 @Controller()
@@ -17,6 +18,7 @@ export class DashboardController {
 
   @Post('activity')
   async createActivity(
+    @Req() request: FastifyRequest,
     @Body()
     payload: {
       id: string;
@@ -24,10 +26,15 @@ export class DashboardController {
       category: string;
       action: string;
       description: string;
-      user: string;
+      user?: string;
     },
   ) {
-    await this.dashboardService.createActivity(payload);
+    const user = (request as any)?.user;
+    await this.dashboardService.createActivity({
+      ...payload,
+      user: user?.name || user?.sub || payload.user || 'Unknown',
+      line_uid: user?.sub ?? null,
+    });
     return { ok: true };
   }
 }

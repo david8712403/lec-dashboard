@@ -12,6 +12,7 @@ export function useAssessments() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+      credentials: 'include',
     });
     await reload();
   };
@@ -21,12 +22,16 @@ export function useAssessments() {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+      credentials: 'include',
     });
     await reload();
   };
 
   const deleteAssessment = async (id: string) => {
-    await fetch(`${API_BASE_URL}/api/assessments/${id}`, { method: 'DELETE' });
+    await fetch(`${API_BASE_URL}/api/assessments/${id}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    });
     await reload();
   };
 

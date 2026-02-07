@@ -7,3 +7,5 @@ dist
 server/dev.db
 .gemini
 server/gemini-settings.json
+*generated/
+server/prisma/dev.db

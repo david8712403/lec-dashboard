@@ -5,11 +5,12 @@
   "scripts": {
     "predev": "prisma generate",
     "dev": "PORT=3004 node -r ts-node/register src/main.ts",
-    "build": "nest build",
+    "build": "rm -rf dist tsconfig.build.tsbuildinfo && nest build",
     "start": "node dist/main.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:seed": "node prisma/seed.js"
+    "prisma:seed": "node prisma/seed.js",
+    "data:migrate:sqlite-to-postgres": "tsx scripts/migrate-sqlite-to-postgres.ts"
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",

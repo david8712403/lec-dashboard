@@ -87,6 +87,7 @@ export default function DashboardPage() {
           method: editingPayment.method,
           note: editingPayment.note,
         }),
+        credentials: 'include',
       });
       toast('已更新繳費明細。', 'success');
       await reloadStats();
@@ -102,7 +103,10 @@ export default function DashboardPage() {
     const confirmed = window.confirm('確定要刪除這筆繳費紀錄嗎？');
     if (!confirmed) return;
     try {
-      await fetch(`${API_BASE_URL}/api/payments/${editingPayment.id}`, { method: 'DELETE' });
+      await fetch(`${API_BASE_URL}/api/payments/${editingPayment.id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
       toast('已刪除繳費紀錄。', 'success');
       await reloadStats();
       setEditingPayment(null);
@@ -316,6 +320,7 @@ export default function DashboardPage() {
                           week_start: formatLocalDate(weekStart),
                           tz_offset: new Date().getTimezoneOffset(),
                         }),
+                        credentials: 'include',
                       });
                       if (!response.ok) {
                         throw new Error(`API error: ${response.status}`);

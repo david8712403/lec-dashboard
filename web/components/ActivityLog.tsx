@@ -14,6 +14,18 @@ export const ActivityLog: React.FC<ActivityLogProps> = ({ activities }) => {
     if (value.includes('T')) {
       const date = new Date(value);
       if (isNaN(date.getTime())) return value.replace('T', ' ').split('.')[0];
+      const diffMs = Date.now() - date.getTime();
+      const diffSeconds = Math.floor(diffMs / 1000);
+      const diffMinutes = Math.floor(diffSeconds / 60);
+      const diffHours = Math.floor(diffMinutes / 60);
+      const diffDays = Math.floor(diffHours / 24);
+
+      if (diffMs >= 0 && diffDays < 3) {
+        if (diffSeconds < 60) return '剛剛';
+        if (diffMinutes < 60) return `${diffMinutes} 分鐘前`;
+        if (diffHours < 24) return `${diffHours} 小時前`;
+        return `${diffDays} 天前`;
+      }
       return new Intl.DateTimeFormat(undefined, {
         year: 'numeric',
         month: '2-digit',
@@ -87,8 +99,20 @@ export const ActivityLog: React.FC<ActivityLogProps> = ({ activities }) => {
                       <div className="mt-4 pt-3 border-t border-slate-50 flex justify-end items-center gap-2">
                         <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">紀錄執行人員:</span>
                         <div className="flex items-center gap-1.5">
-                           <div className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-[9px] font-bold">T</div>
-                           <span className="text-xs font-bold text-slate-700">{entry.user}</span>
+                           {entry.user_picture ? (
+                             <img
+                               src={entry.user_picture}
+                               alt={entry.user_display_name || entry.user}
+                               className="w-5 h-5 rounded-full object-cover border border-slate-200"
+                             />
+                           ) : (
+                             <div className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-[9px] font-bold">
+                               {(entry.user_display_name || entry.user || 'U').slice(0, 1)}
+                             </div>
+                           )}
+                           <span className="text-xs font-bold text-slate-700">
+                             {entry.user_display_name || entry.user}
+                           </span>
                         </div>
                       </div>
                     </div>

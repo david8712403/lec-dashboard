@@ -18,6 +18,7 @@ export function useActivityLogger() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newLog),
+      credentials: 'include',
     }).catch((error) => {
       console.warn('Failed to persist activity log:', error);
     });

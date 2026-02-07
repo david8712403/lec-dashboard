@@ -16,7 +16,9 @@ export function useResource<T>(endpoint: string, initialValue: T) {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(`${API_BASE_URL}${endpoint}`);
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        credentials: 'include',
+      });
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
       }

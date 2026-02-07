@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@line/liff": "^2.27.3",
     "@openai/chatkit-react": "^1.4.3",
     "next": "^15.2.3",
     "react": "^19.2.4",

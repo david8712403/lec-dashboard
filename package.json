@@ -10,6 +10,7 @@
     "dev:web": "npm --workspace web run dev",
     "dev:server": "npm --workspace server run dev",
     "build": "npm --workspace web run build && npm --workspace server run build",
+    "prod": "npm run build && concurrently -n web,server -c blue,green \"PORT=3003 NODE_ENV=production npm --workspace web run start\" \"NODE_ENV=production npm --workspace server run start\"",
     "prisma:generate": "npm --workspace server run prisma:generate",
     "prisma:migrate": "npm --workspace server run prisma:migrate",
     "prisma:seed": "npm --workspace server run prisma:seed"

@@ -18,6 +18,7 @@ async function bootstrap() {
 
   await app.register(cors, {
     origin: true,
+    credentials: true,
   });
 
   app.setGlobalPrefix('api');

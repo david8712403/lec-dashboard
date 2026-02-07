@@ -22,6 +22,16 @@ export class DashboardService {
         this.prisma.activityLog.findMany(),
       ]);
 
+    const lineUids = Array.from(
+      new Set(activities.map((activity) => activity.line_uid).filter(Boolean)),
+    ) as string[];
+    const users = lineUids.length
+      ? await this.prisma.lineUser.findMany({
+          where: { line_uid: { in: lineUids } },
+        })
+      : [];
+    const userMap = new Map(users.map((user) => [user.line_uid, user]));
+
     return {
       students: students.map((student) => ({
         ...student,
@@ -51,6 +61,13 @@ export class DashboardService {
       activities: activities.map((activity) => ({
         ...activity,
         timestamp: formatDateTime(activity.timestamp),
+        user_picture: activity.line_uid ? userMap.get(activity.line_uid)?.picture_url ?? null : null,
+        user_display_name: activity.line_uid
+          ? userMap.get(activity.line_uid)?.system_display_name ??
+            userMap.get(activity.line_uid)?.line_display_name ??
+            userMap.get(activity.line_uid)?.display_name ??
+            null
+          : null,
       })),
     };
   }
@@ -129,6 +146,7 @@ export class DashboardService {
     action: string;
     description: string;
     user: string;
+    line_uid?: string | null;
   }) {
     const parsedTimestamp = payload.timestamp
       ? new Date(payload.timestamp)
@@ -144,6 +162,7 @@ export class DashboardService {
         action: payload.action,
         description: payload.description,
         user: payload.user,
+        line_uid: payload.line_uid ?? null,
       },
     });
   }

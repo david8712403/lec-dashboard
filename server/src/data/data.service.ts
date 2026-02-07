@@ -70,6 +70,37 @@ export class DataService {
     private readonly assessmentHelper: AssessmentHelperService,
   ) {}
 
+  private getActor(user?: { name?: string; sub?: string }) {
+    return {
+      user: user?.name || user?.sub || 'Unknown',
+      line_uid: user?.sub ?? null,
+    };
+  }
+
+  private async logActivity(
+    category: '個案' | '繳費' | '課程',
+    action: string,
+    description: string,
+    user?: { name?: string; sub?: string },
+  ) {
+    const actor = this.getActor(user);
+    try {
+      await this.prisma.activityLog.create({
+        data: {
+          id: randomUUID(),
+          timestamp: new Date(),
+          category,
+          action,
+          description,
+          user: actor.user,
+          line_uid: actor.line_uid,
+        },
+      });
+    } catch (error) {
+      console.warn('Failed to write activity log:', error);
+    }
+  }
+
   async listStudents() {
     const students = await this.prisma.student.findMany();
     return students.map((student) => ({
@@ -80,8 +111,8 @@ export class DataService {
     }));
   }
 
-  async createStudent(payload: any) {
-    return this.prisma.student.create({
+  async createStudent(payload: any, user?: { name?: string; sub?: string }) {
+    const student = await this.prisma.student.create({
       data: {
         id: randomUUID(),
         name: payload.name,
@@ -96,9 +127,11 @@ export class DataService {
         tags: payload.tags ?? [],
       },
     });
+    await this.logActivity('個案', '新增個案', `新增個案 ${student.name}`, user);
+    return student;
   }
 
-  async updateStudent(id: string, payload: any) {
+  async updateStudent(id: string, payload: any, user?: { name?: string; sub?: string }) {
     const data: Record<string, any> = {};
     if (payload.name !== undefined) data.name = payload.name;
     if (payload.phone !== undefined) data.phone = payload.phone;
@@ -111,17 +144,27 @@ export class DataService {
     if (payload.status !== undefined) data.status = payload.status;
     if (payload.tags !== undefined) data.tags = payload.tags;
 
-    return this.prisma.student.update({ where: { id }, data });
+    const student = await this.prisma.student.update({ where: { id }, data });
+    await this.logActivity('個案', '更新個案', `更新個案 ${student.name}`, user);
+    return student;
   }
 
-  async deleteStudent(id: string) {
-    return this.prisma.$transaction([
+  async deleteStudent(id: string, user?: { name?: string; sub?: string }) {
+    const student = await this.prisma.student.findUnique({ where: { id } });
+    const result = await this.prisma.$transaction([
       this.prisma.scheduleSlot.deleteMany({ where: { student_id: id } }),
       this.prisma.session.deleteMany({ where: { student_id: id } }),
       this.prisma.payment.deleteMany({ where: { student_id: id } }),
       this.prisma.assessment.deleteMany({ where: { student_id: id } }),
       this.prisma.student.delete({ where: { id } }),
     ]);
+    await this.logActivity(
+      '個案',
+      '刪除個案',
+      `刪除個案 ${student?.name ?? id}`,
+      user,
+    );
+    return result;
   }
 
   async listSlots() {
@@ -132,9 +175,9 @@ export class DataService {
     }));
   }
 
-  async createSlot(payload: any) {
+  async createSlot(payload: any, user?: { name?: string; sub?: string }) {
     const { start, end } = resolveTimeRange(payload);
-    return this.prisma.scheduleSlot.create({
+    const slot = await this.prisma.scheduleSlot.create({
       data: {
         id: randomUUID(),
         student_id: payload.student_id,
@@ -145,9 +188,16 @@ export class DataService {
         effective_from: toDate(payload.effective_from),
       },
     });
+    await this.logActivity(
+      '課程',
+      '新增固定課表',
+      `新增固定課表 ${slot.weekday} ${slot.start_time}-${slot.end_time}`,
+      user,
+    );
+    return slot;
   }
 
-  async updateSlot(id: string, payload: any) {
+  async updateSlot(id: string, payload: any, user?: { name?: string; sub?: string }) {
     const data: Record<string, any> = {};
     if (payload.student_id !== undefined) data.student_id = payload.student_id;
     if (payload.weekday !== undefined) data.weekday = Number(payload.weekday);
@@ -163,11 +213,25 @@ export class DataService {
     if (payload.note !== undefined) data.note = payload.note;
     if (payload.effective_from !== undefined) data.effective_from = toDate(payload.effective_from);
 
-    return this.prisma.scheduleSlot.update({ where: { id }, data });
+    const slot = await this.prisma.scheduleSlot.update({ where: { id }, data });
+    await this.logActivity(
+      '課程',
+      '更新固定課表',
+      `更新固定課表 ${slot.weekday} ${slot.start_time}-${slot.end_time}`,
+      user,
+    );
+    return slot;
   }
 
-  async deleteSlot(id: string) {
-    return this.prisma.scheduleSlot.delete({ where: { id } });
+  async deleteSlot(id: string, user?: { name?: string; sub?: string }) {
+    const slot = await this.prisma.scheduleSlot.delete({ where: { id } });
+    await this.logActivity(
+      '課程',
+      '刪除固定課表',
+      `刪除固定課表 ${slot.weekday} ${slot.start_time}-${slot.end_time}`,
+      user,
+    );
+    return slot;
   }
 
   async listSessions() {
@@ -178,9 +242,9 @@ export class DataService {
     }));
   }
 
-  async createSession(payload: any) {
+  async createSession(payload: any, user?: { name?: string; sub?: string }) {
     const { start, end } = resolveTimeRange(payload);
-    return this.prisma.session.create({
+    const session = await this.prisma.session.create({
       data: {
         id: randomUUID(),
         student_id: payload.student_id,
@@ -195,9 +259,16 @@ export class DataService {
         attachments: payload.attachments ?? null,
       },
     });
+    await this.logActivity(
+      '課程',
+      '新增課程',
+      `新增課程 ${formatDate(session.session_date)} ${session.start_time}-${session.end_time}`,
+      user,
+    );
+    return session;
   }
 
-  async updateSession(id: string, payload: any) {
+  async updateSession(id: string, payload: any, user?: { name?: string; sub?: string }) {
     const data: Record<string, any> = {};
     if (payload.student_id !== undefined) data.student_id = payload.student_id;
     if (payload.session_date !== undefined) data.session_date = toDate(payload.session_date);
@@ -217,21 +288,38 @@ export class DataService {
     if (payload.pc_summary !== undefined) data.pc_summary = payload.pc_summary;
     if (payload.attachments !== undefined) data.attachments = payload.attachments;
 
-    return this.prisma.session.update({ where: { id }, data });
+    const session = await this.prisma.session.update({ where: { id }, data });
+    await this.logActivity(
+      '課程',
+      '更新課程',
+      `更新課程 ${formatDate(session.session_date)} ${session.start_time}-${session.end_time}`,
+      user,
+    );
+    return session;
   }
 
-  async deleteSession(id: string) {
-    return this.prisma.session.delete({ where: { id } });
+  async deleteSession(id: string, user?: { name?: string; sub?: string }) {
+    const session = await this.prisma.session.delete({ where: { id } });
+    await this.logActivity(
+      '課程',
+      '刪除課程',
+      `刪除課程 ${formatDate(session.session_date)} ${session.start_time}-${session.end_time}`,
+      user,
+    );
+    return session;
   }
 
-  async createSessionsForWeek(payload: {
-    week_start?: string;
-    weekStart?: string;
-    anchor_date?: string;
-    anchorDate?: string;
-    tz_offset?: number;
-    tzOffset?: number;
-  } = {}) {
+  async createSessionsForWeek(
+    payload: {
+      week_start?: string;
+      weekStart?: string;
+      anchor_date?: string;
+      anchorDate?: string;
+      tz_offset?: number;
+      tzOffset?: number;
+    } = {},
+    user?: { name?: string; sub?: string },
+  ) {
     const offsetMinutes =
       Number(payload.tz_offset ?? payload.tzOffset ?? 0) || 0;
     const explicitWeekStart =
@@ -297,6 +385,13 @@ export class DataService {
       await this.prisma.session.createMany({ data: sessionsToCreate });
     }
 
+    await this.logActivity(
+      '課程',
+      '批次建立課程',
+      `批次建立課程 ${formatDate(weekStart)} ~ ${formatDate(weekEnd)}，新增 ${sessionsToCreate.length} 筆`,
+      user,
+    );
+
     return {
       createdCount: sessionsToCreate.length,
       weekStart: formatDate(weekStart),
@@ -312,7 +407,7 @@ export class DataService {
     }));
   }
 
-  async createPayment(payload: any) {
+  async createPayment(payload: any, user?: { name?: string; sub?: string }) {
     // Auto-calculate sessions_count if not provided
     let sessionsCount = payload.sessions_count;
 
@@ -320,7 +415,7 @@ export class DataService {
       sessionsCount = await this.assessmentHelper.getSessionsCountForStudent(payload.student_id);
     }
 
-    return this.prisma.payment.create({
+    const payment = await this.prisma.payment.create({
       data: {
         id: randomUUID(),
         student_id: payload.student_id,
@@ -335,9 +430,16 @@ export class DataService {
         note: payload.note ?? null,
       },
     });
+    await this.logActivity(
+      '繳費',
+      '新增繳費',
+      `新增繳費 ${payment.amount} (${payment.status})`,
+      user,
+    );
+    return payment;
   }
 
-  async updatePayment(id: string, payload: any) {
+  async updatePayment(id: string, payload: any, user?: { name?: string; sub?: string }) {
     const data: Record<string, any> = {};
     if (payload.student_id !== undefined) data.student_id = payload.student_id;
     if (payload.paid_at !== undefined) data.paid_at = toDate(payload.paid_at);
@@ -350,11 +452,25 @@ export class DataService {
     if (payload.month_ref !== undefined) data.month_ref = payload.month_ref;
     if (payload.note !== undefined) data.note = payload.note;
 
-    return this.prisma.payment.update({ where: { id }, data });
+    const payment = await this.prisma.payment.update({ where: { id }, data });
+    await this.logActivity(
+      '繳費',
+      '更新繳費',
+      `更新繳費 ${payment.amount} (${payment.status})`,
+      user,
+    );
+    return payment;
   }
 
-  async deletePayment(id: string) {
-    return this.prisma.payment.delete({ where: { id } });
+  async deletePayment(id: string, user?: { name?: string; sub?: string }) {
+    const payment = await this.prisma.payment.delete({ where: { id } });
+    await this.logActivity(
+      '繳費',
+      '刪除繳費',
+      `刪除繳費 ${payment.amount} (${payment.status})`,
+      user,
+    );
+    return payment;
   }
 
   async listAssessments() {
@@ -368,16 +484,120 @@ export class DataService {
     }));
   }
 
-  async listActivities() {
-    const activities = await this.prisma.activityLog.findMany();
-    return activities.map((activity) => ({
-      ...activity,
-      timestamp: formatDateTime(activity.timestamp),
-    }));
+  async listActivities(params?: {
+    page?: number;
+    pageSize?: number;
+    start_date?: string;
+    end_date?: string;
+    user?: string;
+    line_uid?: string;
+    line_uids?: string;
+    users?: string;
+  }) {
+    const page = Math.max(Number(params?.page ?? 1) || 1, 1);
+    const pageSize = Math.max(Number(params?.pageSize ?? 20) || 20, 1);
+    const startDate = params?.start_date ? new Date(params.start_date) : null;
+    const endDate = params?.end_date ? new Date(params.end_date) : null;
+
+    const where: any = {};
+    if (startDate && !isNaN(startDate.getTime())) {
+      where.timestamp = { ...(where.timestamp ?? {}), gte: startDate };
+    }
+    if (endDate && !isNaN(endDate.getTime())) {
+      endDate.setHours(23, 59, 59, 999);
+      where.timestamp = { ...(where.timestamp ?? {}), lte: endDate };
+    }
+    const lineUidsCsv = params?.line_uids?.trim();
+    const usersCsv = params?.users?.trim();
+    const lineUidList = lineUidsCsv
+      ? lineUidsCsv.split(',').map((item) => item.trim()).filter(Boolean)
+      : [];
+    const userList = usersCsv
+      ? usersCsv.split(',').map((item) => item.trim()).filter(Boolean)
+      : [];
+
+    if (lineUidList.length > 0 || userList.length > 0) {
+      where.OR = [
+        lineUidList.length > 0 ? { line_uid: { in: lineUidList } } : undefined,
+        userList.length > 0 ? { user: { in: userList } } : undefined,
+      ].filter(Boolean);
+    } else if (params?.line_uid) {
+      where.line_uid = params.line_uid;
+    } else if (params?.user) {
+      where.user = { contains: params.user };
+    }
+
+    const [total, activities] = await Promise.all([
+      this.prisma.activityLog.count({ where }),
+      this.prisma.activityLog.findMany({
+        where,
+        orderBy: { timestamp: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
+
+    const lineUids = Array.from(
+      new Set(activities.map((activity) => activity.line_uid).filter(Boolean)),
+    ) as string[];
+    const users = lineUids.length
+      ? await this.prisma.lineUser.findMany({
+          where: { line_uid: { in: lineUids } },
+        })
+      : [];
+    const userMap = new Map(users.map((user) => [user.line_uid, user]));
+
+    return {
+      items: activities.map((activity) => ({
+        ...activity,
+        timestamp: formatDateTime(activity.timestamp),
+        user_picture: activity.line_uid ? userMap.get(activity.line_uid)?.picture_url ?? null : null,
+        user_display_name: activity.line_uid
+          ? userMap.get(activity.line_uid)?.system_display_name ??
+            userMap.get(activity.line_uid)?.line_display_name ??
+            userMap.get(activity.line_uid)?.display_name ??
+            null
+          : null,
+      })),
+      total,
+      page,
+      pageSize,
+    };
   }
 
-  async createAssessment(payload: any) {
-    return this.prisma.assessment.create({
+  async listActivityOperators() {
+    const activities = await this.prisma.activityLog.findMany({
+      select: { user: true, line_uid: true },
+      distinct: ['user', 'line_uid'],
+    });
+    const lineUids = Array.from(
+      new Set(activities.map((activity) => activity.line_uid).filter(Boolean)),
+    ) as string[];
+    const users = lineUids.length
+      ? await this.prisma.lineUser.findMany({
+          where: { line_uid: { in: lineUids } },
+        })
+      : [];
+    const userMap = new Map(users.map((user) => [user.line_uid, user]));
+    return activities
+      .map((activity) => {
+        const lineUser = activity.line_uid ? userMap.get(activity.line_uid) : null;
+        return {
+          line_uid: activity.line_uid ?? null,
+          user: activity.user,
+          user_display_name:
+            lineUser?.system_display_name ??
+            lineUser?.line_display_name ??
+            lineUser?.display_name ??
+            activity.user,
+          user_picture: lineUser?.picture_url ?? null,
+        };
+      })
+      .sort((a, b) => (a.user_display_name || '').localeCompare(b.user_display_name || ''));
+  }
+
+  async createAssessment(payload: any, user?: { name?: string; sub?: string }) {
+    const assessment = await this.prisma.assessment.create({
       data: {
         id: randomUUID(),
         student_id: payload.student_id,
@@ -389,9 +609,16 @@ export class DataService {
         metrics: payload.metrics ?? {},
       },
     });
+    await this.logActivity(
+      '個案',
+      '新增檢測',
+      `新增檢測 ${formatDate(assessment.assessed_at)}`,
+      user,
+    );
+    return assessment;
   }
 
-  async updateAssessment(id: string, payload: any) {
+  async updateAssessment(id: string, payload: any, user?: { name?: string; sub?: string }) {
     const data: Record<string, any> = {};
     if (payload.student_id !== undefined) data.student_id = payload.student_id;
     if (payload.assessed_at !== undefined) data.assessed_at = toDate(payload.assessed_at);
@@ -401,10 +628,24 @@ export class DataService {
     if (payload.stars !== undefined) data.stars = payload.stars;
     if (payload.metrics !== undefined) data.metrics = payload.metrics;
 
-    return this.prisma.assessment.update({ where: { id }, data });
+    const assessment = await this.prisma.assessment.update({ where: { id }, data });
+    await this.logActivity(
+      '個案',
+      '更新檢測',
+      `更新檢測 ${formatDate(assessment.assessed_at)}`,
+      user,
+    );
+    return assessment;
   }
 
-  async deleteAssessment(id: string) {
-    return this.prisma.assessment.delete({ where: { id } });
+  async deleteAssessment(id: string, user?: { name?: string; sub?: string }) {
+    const assessment = await this.prisma.assessment.delete({ where: { id } });
+    await this.logActivity(
+      '個案',
+      '刪除檢測',
+      `刪除檢測 ${formatDate(assessment.assessed_at)}`,
+      user,
+    );
+    return assessment;
   }
 }

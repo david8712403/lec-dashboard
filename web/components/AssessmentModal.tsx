@@ -117,6 +117,7 @@ export function AssessmentModal({
             assessed_at: formData.assessed_at,
             summary: formData.professional_notes || undefined,
           }),
+          credentials: 'include',
         });
 
         if (!response.ok) throw new Error('更新失敗');
@@ -133,6 +134,7 @@ export function AssessmentModal({
             metrics,
             summary: formData.professional_notes || undefined,
           }),
+          credentials: 'include',
         });
 
         if (!response.ok) throw new Error('新增失敗');
