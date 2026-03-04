@@ -286,16 +286,26 @@ const buildDraftFromSnapshot = (report: MonthlyReport): Draft => {
     })),
   );
 
+  const previousMonthRef = shiftMonthRef(currentMonthRef, -1);
+  const previousMonthStars = (snapshot.year_evaluation ?? []).find(
+    (item) => item.month_ref === previousMonthRef,
+  )?.stars_average;
+
   const eval_rows: EvalRow[] = (snapshot.year_evaluation ?? []).map((item) => {
     const isFutureMonth = item.month_ref > currentMonthRef;
+    const isCurrentMonth = item.month_ref === currentMonthRef;
     return {
       month: item.month_ref,
       monthly_amount: isFutureMonth ? '' : String(item.monthly_amount ?? 0),
       students_count: isFutureMonth ? '' : String(item.students_count ?? 0),
-      stars: isFutureMonth ? '' : String(item.stars_average ?? 0),
-      success_cases: isFutureMonth ? '' : String(item.success_cases ?? 0),
-      leave_count: isFutureMonth ? '' : String(item.leave_count ?? 0),
-      absences: isFutureMonth ? '' : String(item.absences ?? 0),
+      stars: isFutureMonth
+        ? ''
+        : isCurrentMonth
+          ? String(previousMonthStars ?? 0)
+          : String(item.stars_average ?? 0),
+      success_cases: '',
+      leave_count: '',
+      absences: '',
     };
   });
 

@@ -353,6 +353,7 @@ export class DataService {
           ],
         },
         select: {
+          student_id: true,
           month_ref: true,
           paid_at: true,
           amount: true,
@@ -548,7 +549,7 @@ export class DataService {
         {
           month_ref: monthKey,
           monthly_amount: 0,
-          students: new Set<string>(),
+          paid_students: new Set<string>(),
           stars_sum: 0,
           stars_count: 0,
           success_cases: 0,
@@ -562,7 +563,6 @@ export class DataService {
       const monthKey = formatDate(item.session_date)?.slice(0, 7);
       if (!monthKey || !yearEvalMap.has(monthKey)) continue;
       const bucket = yearEvalMap.get(monthKey)!;
-      bucket.students.add(item.student_id);
       if (item.attendance === '請假') bucket.absences += 1;
     }
 
@@ -571,7 +571,11 @@ export class DataService {
       const monthFromPaidAt = formatDate(item.paid_at)?.slice(0, 7);
       const monthKey = monthFromRef || monthFromPaidAt;
       if (!monthKey || !yearEvalMap.has(monthKey)) continue;
-      yearEvalMap.get(monthKey)!.monthly_amount += Number(item.amount ?? 0);
+      const bucket = yearEvalMap.get(monthKey)!;
+      bucket.monthly_amount += Number(item.amount ?? 0);
+      if (item.status === '已繳') {
+        bucket.paid_students.add(item.student_id);
+      }
     }
 
     for (const item of yearAssessments) {
@@ -588,7 +592,7 @@ export class DataService {
       return {
         month_ref: monthKey,
         monthly_amount: bucket.monthly_amount,
-        students_count: bucket.students.size,
+        students_count: bucket.paid_students.size,
         stars_average:
           bucket.stars_count > 0 ? Number((bucket.stars_sum / bucket.stars_count).toFixed(2)) : 0,
         success_cases: bucket.success_cases,
