@@ -51,14 +51,50 @@ export class DataController {
     return this.dataService.listSessions();
   }
 
+  @Get('sessions/workbench')
+  listSessionWorkbench(
+    @Query()
+    query: {
+      date?: string;
+      view?: 'today' | 'week';
+      status?: 'pending' | 'all';
+    },
+  ) {
+    return this.dataService.listSessionWorkbench({
+      date: query.date,
+      view: query.view,
+      status: query.status,
+    });
+  }
+
   @Post('sessions')
   createSession(@Req() request: FastifyRequest, @Body() payload: any) {
     return this.dataService.createSession(payload, (request as any)?.user);
   }
 
+  @Post('sessions/quick-open')
+  quickOpenSession(@Req() request: FastifyRequest, @Body() payload: any) {
+    return this.dataService.quickOpenSession(payload, (request as any)?.user);
+  }
+
   @Post('sessions/bulk-week')
   createSessionsForWeek(@Req() request: FastifyRequest, @Body() payload: any) {
     return this.dataService.createSessionsForWeek(payload, (request as any)?.user);
+  }
+
+  @Patch('sessions/:id/quick')
+  quickUpdateSession(@Req() request: FastifyRequest, @Param('id') id: string, @Body() payload: any) {
+    return this.dataService.quickUpdateSession(id, payload, (request as any)?.user);
+  }
+
+  @Post('sessions/:id/complete')
+  completeSession(@Req() request: FastifyRequest, @Param('id') id: string) {
+    return this.dataService.completeSession(id, (request as any)?.user);
+  }
+
+  @Post('sessions/:id/summary')
+  generateSessionSummary(@Req() request: FastifyRequest, @Param('id') id: string) {
+    return this.dataService.generateSessionSummary(id, (request as any)?.user);
   }
 
   @Patch('sessions/:id')
@@ -81,6 +117,11 @@ export class DataController {
     return this.dataService.createPayment(payload, (request as any)?.user);
   }
 
+  @Post('payments/bulk-month')
+  bulkCreatePaymentsByMonth(@Req() request: FastifyRequest, @Body() payload: any) {
+    return this.dataService.bulkCreatePaymentsByMonth(payload, (request as any)?.user);
+  }
+
   @Patch('payments/:id')
   updatePayment(@Req() request: FastifyRequest, @Param('id') id: string, @Body() payload: any) {
     return this.dataService.updatePayment(id, payload, (request as any)?.user);
@@ -94,6 +135,26 @@ export class DataController {
   @Get('assessments')
   listAssessments() {
     return this.dataService.listAssessments();
+  }
+
+  @Get('monthly-reports')
+  listMonthlyReports(@Query('month_ref') monthRef?: string) {
+    return this.dataService.listMonthlyReports({ month_ref: monthRef });
+  }
+
+  @Get('monthly-reports/:id')
+  getMonthlyReport(@Param('id') id: string) {
+    return this.dataService.getMonthlyReport(id);
+  }
+
+  @Post('monthly-reports/sync')
+  syncMonthlyReport(@Req() request: FastifyRequest, @Body() payload: any) {
+    return this.dataService.syncMonthlyReport(payload, (request as any)?.user);
+  }
+
+  @Patch('monthly-reports/:id')
+  updateMonthlyReport(@Req() request: FastifyRequest, @Param('id') id: string, @Body() payload: any) {
+    return this.dataService.updateMonthlyReport(id, payload, (request as any)?.user);
   }
 
   @Get('activity')

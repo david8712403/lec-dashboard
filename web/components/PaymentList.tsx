@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Assessment, CourseType, COURSE_TYPE_SESSIONS, Payment, PaymentMethod, PaymentStatus, Student, StudentStatus, InvoiceStatus } from '../types';
+import { Assessment, CourseType, COURSE_TYPE_SESSIONS, Payment, PaymentMethod, PaymentStatus, Student, InvoiceStatus } from '../types';
 import { PlusIcon, XIcon, SearchIcon, FileTextIcon, ChevronLeftIcon } from './Icons';
 import { useToast } from './Toast';
 
@@ -12,6 +12,12 @@ interface PaymentListProps {
   onCreatePayment?: (payload: Partial<Payment>) => Promise<void>;
   onUpdatePayment?: (id: string, payload: Partial<Payment>) => Promise<void>;
   onDeletePayment?: (id: string) => Promise<void>;
+  onBulkCreateMonth?: (monthRef: string) => Promise<{
+    month_ref: string;
+    activeStudents: number;
+    createdCount: number;
+    skippedCount: number;
+  }>;
   onLogActivity?: (category: '繳費', action: string, description: string) => void;
   onReload?: () => void | Promise<void>;
 }
@@ -55,6 +61,7 @@ export const PaymentList: React.FC<PaymentListProps> = ({
   onCreatePayment,
   onUpdatePayment,
   onDeletePayment,
+  onBulkCreateMonth,
   onLogActivity,
   onReload,
 }) => {
@@ -243,35 +250,17 @@ export const PaymentList: React.FC<PaymentListProps> = ({
   };
 
   const handleBulkCreate = async (month: string) => {
-    if (!onCreatePayment) return;
+    if (!onBulkCreateMonth) return;
     if (bulkCreating) return;
     setBulkCreating(month);
     try {
-      const activeStudents = students.filter((s) => s.status === StudentStatus.ACTIVE);
-      const existing = new Set(
-        payments
-          .filter((p) => p.month_ref === month)
-          .map((p) => p.student_id),
+      const result = await onBulkCreateMonth(month);
+      toast(
+        result.createdCount > 0
+          ? `已建立 ${result.createdCount} 筆繳費紀錄`
+          : '本月沒有新增繳費紀錄',
+        'success',
       );
-
-      let createdCount = 0;
-
-      for (const student of activeStudents) {
-        if (existing.has(student.id)) continue;
-        const sessionsCount = calculateSessions(student.id);
-        await onCreatePayment({
-          student_id: student.id,
-          month_ref: month,
-          amount: student.default_fee ?? 0,
-          status: PaymentStatus.UNPAID,
-          method: PaymentMethod.CASH,
-          sessions_count: sessionsCount > 0 ? sessionsCount : undefined,
-        });
-        createdCount += 1;
-      }
-
-      onLogActivity?.('繳費', '批次建立繳費', `建立 ${month} 未繳紀錄 ${createdCount} 筆。`);
-      toast(createdCount > 0 ? `已建立 ${createdCount} 筆繳費紀錄` : '本月沒有新增繳費紀錄', 'success');
       if (onReload) {
         await onReload();
       }

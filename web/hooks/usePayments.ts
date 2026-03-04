@@ -35,6 +35,26 @@ export function usePayments() {
     await reload();
   };
 
+  const bulkCreateMonthPayments = async (monthRef: string) => {
+    const response = await fetch(`${API_BASE_URL}/api/payments/bulk-month`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ month_ref: monthRef }),
+      credentials: 'include',
+    });
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
+    const result = (await response.json()) as {
+      month_ref: string;
+      activeStudents: number;
+      createdCount: number;
+      skippedCount: number;
+    };
+    await reload();
+    return result;
+  };
+
   return {
     payments: data,
     loading,
@@ -43,5 +63,6 @@ export function usePayments() {
     createPayment,
     updatePayment,
     deletePayment,
+    bulkCreateMonthPayments,
   };
 }

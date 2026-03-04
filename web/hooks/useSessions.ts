@@ -1,6 +1,6 @@
 'use client';
 
-import { Session } from '@/types';
+import { Session, SessionRecordStatus } from '@/types';
 import { API_BASE_URL } from './useDashboardData';
 import { useResource } from './useResource';
 
@@ -12,6 +12,8 @@ const normalizeSessionDate = (value?: string | null) => {
 const normalizeSession = (session: Session): Session => ({
   ...session,
   session_date: normalizeSessionDate(session.session_date) ?? session.session_date,
+  record_status: session.record_status ?? SessionRecordStatus.PENDING,
+  completed_at: normalizeSessionDate(session.completed_at ?? undefined) ?? session.completed_at ?? null,
 });
 
 export function useSessions() {

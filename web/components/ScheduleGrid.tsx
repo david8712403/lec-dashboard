@@ -220,7 +220,6 @@ export const ScheduleGrid: React.FC<ScheduleGridProps> = ({
                               >
                                 <span className="font-bold truncate">{getStudentName(slot.student_id)}</span>
                                 <span className="flex items-center gap-1">
-                                  <span className="text-[9px] text-slate-400">固定</span>
                                   {onDeleteSlot && (
                                     <button
                                       type="button"

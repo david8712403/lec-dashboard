@@ -7,6 +7,7 @@ import { API_BASE_URL } from '@/hooks/useDashboardData';
 type LoginState = 'init' | 'ready' | 'logging' | 'error';
 
 const LIFF_ID = process.env.NEXT_PUBLIC_LIFF_ID ?? '2009066922-nf7ZHqqi';
+const LIFF_LOGIN_REDIRECT_URI = process.env.NEXT_PUBLIC_LIFF_REDIRECT_URI ?? '';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -105,7 +106,13 @@ export default function LoginPage() {
       const liff = (await import('@line/liff')).default;
       await liff.init({ liffId: LIFF_ID });
       if (!liff.isLoggedIn()) {
-        liff.login({ redirectUri: window.location.href });
+        const explicitRedirect = LIFF_LOGIN_REDIRECT_URI.trim();
+        if (explicitRedirect) {
+          liff.login({ redirectUri: explicitRedirect });
+          return;
+        }
+        // Use LIFF endpoint URL as redirect target by default to avoid LINE 400 from invalid redirect_uri.
+        liff.login();
         return;
       }
     } catch (error) {
@@ -116,20 +123,20 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center px-4">
-      <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-sm p-8 space-y-6">
+    <div className="min-h-screen bg-[var(--bg-base)] flex items-center justify-center px-4">
+      <div className="w-full max-w-md bg-[var(--bg-surface)] border border-[var(--line-soft)] rounded-2xl shadow-sm p-7 space-y-6">
         <div className="space-y-2 text-center">
-          <div className="w-14 h-14 mx-auto rounded-2xl bg-primary/10 text-primary flex items-center justify-center text-2xl font-black">
+          <div className="w-14 h-14 mx-auto rounded-2xl bg-[var(--brand-soft)] text-[var(--brand)] flex items-center justify-center text-2xl font-black">
             LEC
           </div>
-          <h1 className="text-2xl font-bold text-slate-800">LEC Dashboard</h1>
-          <p className="text-sm text-slate-500">請使用 LINE 帳號登入</p>
+          <h1 className="text-2xl font-bold text-[var(--ink-main)]">劉氏教育</h1>
+          <p className="text-sm text-[var(--ink-muted)]">請使用 LINE 帳號登入</p>
         </div>
 
         <button
           onClick={handleLogin}
           disabled={state === 'logging'}
-          className="w-full py-3 rounded-xl bg-emerald-500 text-white font-bold text-sm hover:bg-emerald-600 transition-all disabled:opacity-60"
+          className="w-full py-3 rounded-xl bg-[var(--brand)] text-white font-bold text-sm hover:opacity-90 transition-all disabled:opacity-60"
         >
           {state === 'logging' ? '登入中...' : '使用 LINE 登入'}
         </button>
@@ -147,7 +154,7 @@ export default function LoginPage() {
         )}
 
         {state === 'ready' && (
-          <p className="text-xs text-slate-400 text-center">
+          <p className="text-xs text-[var(--ink-muted)] text-center">
             若未自動跳轉，請點擊上方登入按鈕。
           </p>
         )}

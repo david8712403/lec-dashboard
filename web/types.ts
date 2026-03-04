@@ -51,6 +51,12 @@ export enum AttendanceStatus {
   UNKNOWN = '未登記'
 }
 
+export enum SessionRecordStatus {
+  PENDING = '待紀錄',
+  IN_PROGRESS = '進行中',
+  DONE = '已完成',
+}
+
 export interface Session {
   id: string;
   student_id: string;
@@ -58,6 +64,9 @@ export interface Session {
   start_time: string;
   end_time: string;
   attendance: AttendanceStatus;
+  record_status: SessionRecordStatus;
+  completed_at?: string | null;
+  updated_at?: string | null;
   teacher_name?: string;
   note?: string; // Short administrative note
   performance_log?: string; // New: Detailed daily observation

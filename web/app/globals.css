@@ -2,21 +2,47 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom scrollbar for cleaner UI */
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
+
+:root {
+  --bg-base: #f4f6f3;
+  --bg-surface: #fbfcfa;
+  --ink-main: #1d2a26;
+  --ink-muted: #5b6c66;
+  --line-soft: #d6ddd8;
+  --brand: #2f6a5b;
+  --brand-soft: #e5eee9;
+}
+
+html,
+body {
+  background: var(--bg-base);
+  color: var(--ink-main);
+  font-family: 'Noto Sans TC', 'Manrope', sans-serif;
+}
+
+input,
+textarea,
+select,
+button {
+  font-family: inherit;
+}
+
+/* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: #e9eeea;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #b9c7c0;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #95a8a0;
 }

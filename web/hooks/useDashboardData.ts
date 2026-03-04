@@ -221,6 +221,11 @@ export function useDashboardData() {
     await loadDashboard();
   };
 
+  const deleteSession = async (id: string) => {
+    await fetchWithAuth(`${apiBaseUrl}/api/sessions/${id}`, { method: 'DELETE' });
+    await loadDashboard();
+  };
+
   return {
     apiBaseUrl,
     students,
@@ -247,5 +252,6 @@ export function useDashboardData() {
     deleteAssessment,
     createSession,
     updateSession,
+    deleteSession,
   };
 }

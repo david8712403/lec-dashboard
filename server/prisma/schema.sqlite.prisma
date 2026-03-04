@@ -49,16 +49,20 @@ model Session {
   start_time      String
   end_time        String
   attendance      String
+  record_status   String   @default("待紀錄")
+  completed_at    DateTime?
   teacher_name    String?
   note            String?
   performance_log String?
   pc_summary      String?
   attachments     Json?
+  updated_at      DateTime @updatedAt
 
   student         Student  @relation(fields: [student_id], references: [id])
 
   @@index([student_id])
   @@index([session_date])
+  @@unique([student_id, session_date, start_time, end_time])
 }
 
 model Payment {

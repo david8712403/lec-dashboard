@@ -48,16 +48,20 @@ model Session {
   start_time      String
   end_time        String
   attendance      String
+  record_status   String   @default("待紀錄")
+  completed_at    DateTime?
   teacher_name    String?
   note            String?
   performance_log String?
   pc_summary      String?
   attachments     Json?
+  updated_at      DateTime @updatedAt
 
   student         Student  @relation(fields: [student_id], references: [id])
 
   @@index([student_id])
   @@index([session_date])
+  @@unique([student_id, session_date, start_time, end_time])
 }
 
 model Payment {
@@ -93,6 +97,23 @@ model Assessment {
   @@index([student_id])
   @@index([student_id, assessed_at])
   @@index([stars])
+}
+
+model MonthlyReport {
+  id            String   @id
+  month_ref     String   @unique
+  title         String
+  content_page1 String   @default("")
+  content_page2 String   @default("")
+  content_page3 String   @default("")
+  source_snapshot Json?
+  sync_status   String   @default("未同步")
+  synced_at     DateTime?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  @@index([month_ref])
+  @@index([updated_at])
 }
 
 model ActivityLog {
