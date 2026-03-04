@@ -391,6 +391,7 @@ export class DataService {
     const studentIds = Array.from(
       new Set(
         [
+          ...activeScheduleSlots.map((slot) => slot.student_id),
           ...sessions.map((session) => session.student_id),
           ...payments.map((payment) => payment.student_id),
           ...assessments.map((assessment) => assessment.student_id),
@@ -428,15 +429,21 @@ export class DataService {
       ]),
     );
 
-    const latestAssessmentMap = new Map<string, { course_type: string }>();
+    const latestAssessmentMap = new Map<string, { course_type: string; sessions_count: number }>();
     for (const assessment of latestAssessments) {
       if (latestAssessmentMap.has(assessment.student_id)) continue;
       const metrics =
         typeof assessment.metrics === 'string'
           ? JSON.parse(assessment.metrics)
           : (assessment.metrics ?? {});
+      const courseType = String(metrics?.course_type ?? '');
+      const rawSessionsCount = Number(metrics?.sessions_count);
+      const normalizedSessionsCount = Number.isFinite(rawSessionsCount)
+        ? rawSessionsCount
+        : (this.assessmentHelper.getSessionsCount(courseType) ?? 0);
       latestAssessmentMap.set(assessment.student_id, {
-        course_type: String(metrics?.course_type ?? ''),
+        course_type: courseType,
+        sessions_count: normalizedSessionsCount,
       });
     }
 
@@ -465,6 +472,22 @@ export class DataService {
       }
     >();
 
+    for (const slot of activeScheduleSlots) {
+      const key = slot.student_id;
+      const existing =
+        rosterAggregate.get(key) ??
+        {
+          student_name: studentMap.get(key)?.name ?? slot.student?.name ?? '',
+          admission_date: studentMap.get(key)?.admission_date ?? '',
+          course_type: latestAssessmentMap.get(key)?.course_type ?? '',
+          sessions_count: latestAssessmentMap.get(key)?.sessions_count ?? 0,
+          monthly_fee: 0,
+          actual_paid: 0,
+          payment_methods: new Set<string>(),
+        };
+      rosterAggregate.set(key, existing);
+    }
+
     for (const session of sessions) {
       const key = session.student_id;
       const existing =
@@ -473,12 +496,11 @@ export class DataService {
           student_name: studentMap.get(key)?.name ?? session.student?.name ?? '',
           admission_date: studentMap.get(key)?.admission_date ?? '',
           course_type: latestAssessmentMap.get(key)?.course_type ?? '',
-          sessions_count: 0,
+          sessions_count: latestAssessmentMap.get(key)?.sessions_count ?? 0,
           monthly_fee: 0,
           actual_paid: 0,
           payment_methods: new Set<string>(),
         };
-      existing.sessions_count += 1;
       rosterAggregate.set(key, existing);
     }
 
@@ -490,7 +512,7 @@ export class DataService {
           student_name: studentMap.get(key)?.name ?? payment.student?.name ?? '',
           admission_date: studentMap.get(key)?.admission_date ?? '',
           course_type: latestAssessmentMap.get(key)?.course_type ?? '',
-          sessions_count: 0,
+          sessions_count: latestAssessmentMap.get(key)?.sessions_count ?? 0,
           monthly_fee: 0,
           actual_paid: 0,
           payment_methods: new Set<string>(),
