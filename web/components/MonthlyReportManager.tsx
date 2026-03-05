@@ -177,6 +177,23 @@ const sortRosterRowsByStudentName = (rows: RosterRow[]) =>
       no: String(index + 1),
     }));
 
+const getEvalRowsForExport = (rows: EvalRow[], targetMonthRef: string) => {
+  if (!targetMonthRef) return rows;
+  const previousMonthRef = shiftMonthRef(targetMonthRef, -1);
+  const previousMonthStars = rows.find((row) => row.month === previousMonthRef)?.stars?.trim() || '';
+  const exportStars = previousMonthStars || '0';
+  return rows.map((row) =>
+    row.month === targetMonthRef
+      ? {
+          ...row,
+          stars: exportStars,
+          success_cases: '0',
+          leave_count: '0',
+        }
+      : row,
+  );
+};
+
 const formatMonthRefHeading = (monthRef?: string) => {
   if (!monthRef) return '';
   const [year, month] = monthRef.split('-');
@@ -859,6 +876,10 @@ export function MonthlyReportManager() {
 
   const renderEvalPage = (editable: boolean, printMode = false, pageBreakClass = '') => {
     if (!draft) return null;
+    const targetMonthRef = selectedReport?.month_ref || activeMonthRef;
+    const evalRows = printMode
+      ? getEvalRowsForExport(draft.eval_rows, targetMonthRef)
+      : draft.eval_rows;
     const pageClasses = `w-[210mm] h-[297mm] box-border overflow-hidden rounded-xl border border-[#c5d0ca] bg-white p-[14mm] ${printMode ? 'print:rounded-none print:border-0 print:break-inside-avoid-page' : ''} ${pageBreakClass}`;
     return (
       <article className={pageClasses}>
@@ -881,7 +902,7 @@ export function MonthlyReportManager() {
             </tr>
           </thead>
           <tbody>
-            {draft.eval_rows.map((row, idx) => (
+            {evalRows.map((row, idx) => (
               <tr key={`eval-${idx}`} className="h-12">
                 {evalColumns.map((col) => (
                   <td key={col} className="border-2 border-[#62756d] px-2 py-1 align-middle">

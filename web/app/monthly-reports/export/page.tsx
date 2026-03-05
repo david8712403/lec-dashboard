@@ -92,6 +92,32 @@ const formatMonthRefHeading = (monthRef?: string) => {
   return `${year}年${month}月`;
 };
 
+const shiftMonthRef = (monthRef: string, delta: number) => {
+  const [yearText, monthText] = monthRef.split('-');
+  const year = Number(yearText);
+  const month = Number(monthText);
+  if (Number.isNaN(year) || Number.isNaN(month)) return monthRef;
+  const base = new Date(Date.UTC(year, month - 1 + delta, 1));
+  return `${base.getUTCFullYear()}-${String(base.getUTCMonth() + 1).padStart(2, '0')}`;
+};
+
+const getEvalRowsForExport = (rows: EvalRow[], targetMonthRef: string) => {
+  if (!targetMonthRef) return rows;
+  const previousMonthRef = shiftMonthRef(targetMonthRef, -1);
+  const previousMonthStars = rows.find((row) => row.month === previousMonthRef)?.stars?.trim() || '';
+  const exportStars = previousMonthStars || '0';
+  return rows.map((row) =>
+    row.month === targetMonthRef
+      ? {
+          ...row,
+          stars: exportStars,
+          success_cases: '0',
+          leave_count: '0',
+        }
+      : row,
+  );
+};
+
 const sortRosterRowsByStudentName = (rows: RosterRow[]) =>
   rows
     .slice()
@@ -198,6 +224,10 @@ function MonthlyReportExportContent() {
         return sum + (Number.isNaN(value) ? 0 : value);
       }, 0),
     [draft?.roster_rows],
+  );
+  const evalRowsForExport = useMemo(
+    () => getEvalRowsForExport(draft?.eval_rows ?? [], monthRef),
+    [draft?.eval_rows, monthRef],
   );
   const handleExportPdf = useReactToPrint({
     contentRef: pagesContainerRef,
@@ -374,7 +404,7 @@ function MonthlyReportExportContent() {
               </tr>
             </thead>
             <tbody>
-              {draft.eval_rows.map((row, idx) => (
+              {evalRowsForExport.map((row, idx) => (
                 <tr key={`eval-${idx}`} className="h-12">
                   {evalColumns.map((col) => (
                     <td key={col} className="border-2 border-[#62756d] px-2 py-1 align-middle">
