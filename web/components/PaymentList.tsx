@@ -22,6 +22,8 @@ interface PaymentListProps {
   onReload?: () => void | Promise<void>;
 }
 
+type PaymentSortMode = 'NAME' | 'STATUS' | 'INVOICE';
+
 // Internal Modal Component
 interface ModalProps {
   title: string;
@@ -71,6 +73,7 @@ export const PaymentList: React.FC<PaymentListProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [bulkCreating, setBulkCreating] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState('ALL');
+  const [sortMode, setSortMode] = useState<PaymentSortMode>('NAME');
   const [savingStatusIds, setSavingStatusIds] = useState<Set<string>>(new Set());
   const currentMonth = useMemo(() => new Date().toISOString().slice(0, 7), []);
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(() => new Set([currentMonth]));
@@ -302,6 +305,51 @@ export const PaymentList: React.FC<PaymentListProps> = ({
     [getStudent, onLogActivity, onUpdatePayment, toast],
   );
 
+  const paymentStatusRank = useCallback((status?: PaymentStatus) => {
+    if (status === PaymentStatus.UNPAID) return 0;
+    if (status === PaymentStatus.PAID) return 1;
+    return 99;
+  }, []);
+
+  const invoiceStatusRank = useCallback((status?: InvoiceStatus) => {
+    if (!status || status === InvoiceStatus.NOT_ISSUED) return 0;
+    if (status === InvoiceStatus.ISSUED) return 1;
+    if (status === InvoiceStatus.DELIVERED) return 2;
+    return 99;
+  }, []);
+
+  const compareByStudentName = useCallback(
+    (a: Payment, b: Payment) =>
+      (getStudent(a.student_id)?.name || '').localeCompare(
+        getStudent(b.student_id)?.name || '',
+        'zh-Hant',
+        { numeric: true, sensitivity: 'base' },
+      ),
+    [getStudent],
+  );
+
+  const sortPayments = useCallback(
+    (list: Payment[]) => {
+      const next = [...list];
+      next.sort((a, b) => {
+        if (sortMode === 'STATUS') {
+          const statusDiff = paymentStatusRank(a.status) - paymentStatusRank(b.status);
+          if (statusDiff !== 0) return statusDiff;
+        }
+        if (sortMode === 'INVOICE') {
+          const invoiceDiff =
+            invoiceStatusRank(a.invoice_status) - invoiceStatusRank(b.invoice_status);
+          if (invoiceDiff !== 0) return invoiceDiff;
+        }
+        const byName = compareByStudentName(a, b);
+        if (byName !== 0) return byName;
+        return (a.id || '').localeCompare(b.id || '');
+      });
+      return next;
+    },
+    [compareByStudentName, invoiceStatusRank, paymentStatusRank, sortMode],
+  );
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 h-full flex flex-col overflow-hidden relative">
       {/* Add/Edit Modal */}
@@ -466,6 +514,15 @@ export const PaymentList: React.FC<PaymentListProps> = ({
               <option key={month} value={month}>{month}</option>
             ))}
           </select>
+          <select
+            className="px-3 py-2 border rounded-lg text-sm bg-white font-bold text-slate-600"
+            value={sortMode}
+            onChange={(e) => setSortMode(e.target.value as PaymentSortMode)}
+          >
+            <option value="NAME">姓名排序</option>
+            <option value="STATUS">狀態排序</option>
+            <option value="INVOICE">開票排序</option>
+          </select>
           <button 
             onClick={handleOpenAdd}
             className="px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-bold hover:bg-amber-600 shadow-md shadow-amber-100 transition-all flex items-center gap-2"
@@ -496,8 +553,11 @@ export const PaymentList: React.FC<PaymentListProps> = ({
         <div className="space-y-6">
           {monthsToRender.map((month) => {
             const monthPayments = paymentsByMonthMap.get(month) ?? [];
-            const filtered = monthPayments.filter(p => getStudent(p.student_id)?.name?.includes(searchTerm));
-            const totalAmount = filtered.reduce((sum, p) => sum + (p.amount || 0), 0);
+            const filtered = monthPayments.filter((p) =>
+              getStudent(p.student_id)?.name?.includes(searchTerm),
+            );
+            const sorted = sortPayments(filtered);
+            const totalAmount = sorted.reduce((sum, p) => sum + (p.amount || 0), 0);
             const isExpanded = expandedMonths.has(month);
 
             return (
@@ -516,7 +576,7 @@ export const PaymentList: React.FC<PaymentListProps> = ({
                   </div>
                   <div className="flex items-center gap-2 sm:ml-auto flex-nowrap overflow-x-auto whitespace-nowrap">
                     <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest bg-white px-2 py-0.5 rounded-full border border-slate-100">
-                      {filtered.length} 筆紀錄
+                      {sorted.length} 筆紀錄
                     </span>
                     <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest bg-white px-2 py-0.5 rounded-full border border-slate-100">
                       合計 ${totalAmount.toLocaleString()}
@@ -550,7 +610,7 @@ export const PaymentList: React.FC<PaymentListProps> = ({
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                           {filtered.length > 0 ? (
-                            filtered.map((p) => {
+                            sorted.map((p) => {
                               const student = getStudent(p.student_id);
                               const isUnpaid = p.status === PaymentStatus.UNPAID;
 

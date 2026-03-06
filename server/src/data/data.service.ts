@@ -460,6 +460,7 @@ export class DataService {
       return toMinuteOfDay(aStart) - toMinuteOfDay(bStart);
     });
 
+    const rosterPaidPayments = payments.filter((payment) => payment.status === '已繳');
     const rosterAggregate = new Map<
       string,
       {
@@ -473,39 +474,7 @@ export class DataService {
       }
     >();
 
-    for (const slot of activeScheduleSlots) {
-      const key = slot.student_id;
-      const existing =
-        rosterAggregate.get(key) ??
-        {
-          student_name: studentMap.get(key)?.name ?? slot.student?.name ?? '',
-          admission_date: studentMap.get(key)?.admission_date ?? '',
-          course_type: latestAssessmentMap.get(key)?.course_type ?? '',
-          sessions_count: latestAssessmentMap.get(key)?.sessions_count ?? 0,
-          monthly_fee: 0,
-          actual_paid: 0,
-          payment_methods: new Set<string>(),
-        };
-      rosterAggregate.set(key, existing);
-    }
-
-    for (const session of sessions) {
-      const key = session.student_id;
-      const existing =
-        rosterAggregate.get(key) ??
-        {
-          student_name: studentMap.get(key)?.name ?? session.student?.name ?? '',
-          admission_date: studentMap.get(key)?.admission_date ?? '',
-          course_type: latestAssessmentMap.get(key)?.course_type ?? '',
-          sessions_count: latestAssessmentMap.get(key)?.sessions_count ?? 0,
-          monthly_fee: 0,
-          actual_paid: 0,
-          payment_methods: new Set<string>(),
-        };
-      rosterAggregate.set(key, existing);
-    }
-
-    for (const payment of payments) {
+    for (const payment of rosterPaidPayments) {
       const key = payment.student_id;
       const existing =
         rosterAggregate.get(key) ??
@@ -519,9 +488,7 @@ export class DataService {
           payment_methods: new Set<string>(),
         };
       existing.monthly_fee += Number(payment.amount ?? 0);
-      if (payment.status === '已繳') {
-        existing.actual_paid += Number(payment.amount ?? 0);
-      }
+      existing.actual_paid += Number(payment.amount ?? 0);
       if (payment.method) {
         existing.payment_methods.add(String(payment.method));
       }

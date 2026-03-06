@@ -6,6 +6,7 @@ import { useReactToPrint } from 'react-to-print';
 import { API_BASE_URL } from '@/hooks/useDashboardData';
 import { useToast } from '@/components/Toast';
 import {
+  MONTHLY_REPORT_EVAL_COL_WIDTHS_PX,
   MONTHLY_REPORT_HEADER_IMAGE_PATH,
   MONTHLY_REPORT_SCHEDULE_TIME_COL_WIDTH_PX,
 } from '@/constants/monthlyReport';
@@ -840,9 +841,9 @@ export function MonthlyReportManager() {
           </thead>
           <tbody>
             {draft.roster_rows.map((row, idx) => (
-              <tr key={`roster-${idx}`} className="h-12">
+              <tr key={`roster-${idx}`} className="h-8">
                 {rosterColumns.map((col) => (
-                  <td key={col} className="border-2 border-[#62756d] px-2 py-1 align-middle">
+                  <td key={col} className="border-2 border-[#62756d] px-2 py-0 align-middle">
                     {editable ? (
                       <input
                         value={row[col]}
@@ -891,7 +892,12 @@ export function MonthlyReportManager() {
           />
         </div>
         <div className="text-center text-xl font-black tracking-[0.08em] text-[#1f312a] mb-3">教師評核統計表（教師別）</div>
-        <table className="w-full border-collapse text-sm">
+        <table className="w-full table-fixed border-collapse text-sm">
+          <colgroup>
+            {evalColumns.map((col) => (
+              <col key={`eval-col-${col}`} style={{ width: `${MONTHLY_REPORT_EVAL_COL_WIDTHS_PX[col]}px` }} />
+            ))}
+          </colgroup>
           <thead>
             <tr className="bg-[#eef3f1]">
               {evalHeaders.map((label) => (
