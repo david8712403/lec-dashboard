@@ -6,6 +6,7 @@ import { Student, StudentStatus, Payment, Assessment, ScheduleSlot, Session, Att
 import { SearchIcon, ChevronLeftIcon, UsersIcon, ChartBarIcon, PlusIcon, XIcon, FileTextIcon } from './Icons';
 import { useToast } from './Toast';
 import { AssessmentModal } from './AssessmentModal';
+import { ScheduleGrid } from './ScheduleGrid';
 
 interface StudentManagerProps {
   students: Student[];
@@ -26,6 +27,19 @@ interface StudentManagerProps {
   onCreateAssessment?: (payload: Partial<Assessment>) => Promise<void>;
   onUpdateAssessment?: (id: string, payload: Partial<Assessment>) => Promise<void>;
   onDeleteAssessment?: (id: string) => Promise<void>;
+  onCreateSession?: (payload: Partial<Session>) => Promise<void>;
+  onUpdateSession?: (id: string, payload: Partial<Session>) => Promise<void>;
+  onDeleteSession?: (id: string) => Promise<void>;
+  onBulkCreateWeekSessions?: (payload: {
+    week_start?: string;
+    weekStart?: string;
+    anchor_date?: string;
+    anchorDate?: string;
+    tz_offset?: number;
+    tzOffset?: number;
+    student_id?: string;
+    studentId?: string;
+  }, options?: { reloadAfter?: boolean }) => Promise<{ createdCount: number; weekStart: string; weekEnd: string }>;
   onLogActivity?: (category: any, action: string, description: string) => void;
 }
 
@@ -49,6 +63,46 @@ const timeSlotValue = (slot: TimeSlot) => formatTimeRange(slot.start_time, slot.
 const parseTimeValue = (value: string) => {
   const [start, end] = value.split('-').map((part) => part.trim());
   return { start_time: start || '', end_time: end || '' };
+};
+
+const CALENDAR_WEEK_LABELS = ['一', '二', '三', '四', '五', '六', '日'] as const;
+
+const toDateKey = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getWeekStartDate = (date: Date) => {
+  const next = new Date(date);
+  const day = next.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  next.setDate(next.getDate() + diff);
+  next.setHours(0, 0, 0, 0);
+  return next;
+};
+
+const getMonthWeekStartKeys = (date: Date) => {
+  const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
+  const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+  const cursor = getWeekStartDate(monthStart);
+  const keys: string[] = [];
+  while (cursor <= monthEnd) {
+    keys.push(toDateKey(cursor));
+    cursor.setDate(cursor.getDate() + 7);
+  }
+  return keys;
+};
+
+const isAttendedSession = (attendance?: AttendanceStatus) =>
+  attendance === AttendanceStatus.PRESENT || attendance === AttendanceStatus.MAKEUP;
+
+const getAttendancePillClass = (attendance?: AttendanceStatus) => {
+  if (attendance === AttendanceStatus.PRESENT) return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+  if (attendance === AttendanceStatus.MAKEUP) return 'border-violet-200 bg-violet-50 text-violet-700';
+  if (attendance === AttendanceStatus.ABSENT) return 'border-red-200 bg-red-50 text-red-700';
+  return 'border-slate-200 bg-slate-50 text-slate-600';
 };
 
 // Utility to calculate age in "Y-M" format
@@ -122,6 +176,10 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
   onCreateAssessment,
   onUpdateAssessment,
   onDeleteAssessment,
+  onCreateSession,
+  onUpdateSession,
+  onDeleteSession,
+  onBulkCreateWeekSessions,
   onLogActivity,
 }) => {
   const { toast } = useToast();
@@ -130,17 +188,21 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
   const searchParams = useSearchParams();
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [filter, setFilter] = useState('');
-  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'SCHEDULE' | 'PAYMENTS' | 'ASSESSMENTS'>('OVERVIEW');
+  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'SCHEDULE' | 'TIMETABLE' | 'PAYMENTS' | 'ASSESSMENTS'>('OVERVIEW');
   const [sortKey, setSortKey] = useState<'name' | 'age' | 'status' | 'entry_date'>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   
-  const [modalType, setModalType] = useState<'STUDENT' | 'SLOT' | 'PAYMENT' | 'ASSESSMENT' | null>(null);
+  const [modalType, setModalType] = useState<'STUDENT' | 'SLOT' | 'SESSION' | 'PAYMENT' | 'ASSESSMENT' | null>(null);
   const [editingData, setEditingData] = useState<any>(null);
+  const [scheduleMode, setScheduleMode] = useState<'week' | 'month'>('week');
+  const [scheduleDate, setScheduleDate] = useState(new Date());
+  const [isCreatingWeekSessions, setIsCreatingWeekSessions] = useState(false);
+  const [isCreatingMonthSessions, setIsCreatingMonthSessions] = useState(false);
 
   const selectedStudent = students.find(s => s.id === selectedStudentId);
   const selectedStudentFromQuery = searchParams.get('studentId');
   const tabFromQuery = searchParams.get('tab');
-  const tabValues = ['OVERVIEW', 'SCHEDULE', 'PAYMENTS', 'ASSESSMENTS'] as const;
+  const tabValues = ['OVERVIEW', 'SCHEDULE', 'TIMETABLE', 'PAYMENTS', 'ASSESSMENTS'] as const;
 
   useEffect(() => {
     if (selectedStudentFromQuery) {
@@ -150,6 +212,11 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
       setActiveTab(tabFromQuery as typeof activeTab);
     }
   }, [selectedStudentFromQuery, tabFromQuery]);
+
+  useEffect(() => {
+    setScheduleMode('week');
+    setScheduleDate(new Date());
+  }, [selectedStudentId]);
   const latestAssessmentByStudent = useMemo(() => {
     const map = new Map<string, Assessment>();
     assessments.forEach((assessment) => {
@@ -333,6 +400,31 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
           }
           break;
         }
+        case 'SESSION': {
+          category = '課程';
+          action = isNew ? '新增課程紀錄' : '調整課程時段';
+          const studentName = selectedStudent?.name || '個案';
+          desc = `${action} (${studentName}): ${editingData.session_date} ${formatTimeRange(editingData.start_time, editingData.end_time)} ${editingData.attendance || AttendanceStatus.UNKNOWN}`;
+          if (isNew) {
+            await onCreateSession?.({
+              student_id: selectedStudent?.id,
+              session_date: editingData.session_date,
+              start_time: editingData.start_time,
+              end_time: editingData.end_time,
+              attendance: editingData.attendance || AttendanceStatus.UNKNOWN,
+              note: editingData.note,
+            });
+          } else {
+            await onUpdateSession?.(editingData.id, {
+              session_date: editingData.session_date,
+              start_time: editingData.start_time,
+              end_time: editingData.end_time,
+              attendance: editingData.attendance,
+              note: editingData.note,
+            });
+          }
+          break;
+        }
         case 'PAYMENT': {
           category = '繳費';
           action = isNew ? '新增繳費紀錄' : '編輯繳費紀錄';
@@ -404,6 +496,9 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
           break;
         case 'SLOT':
           await onDeleteSlot?.(editingData.id);
+          break;
+        case 'SESSION':
+          await onDeleteSession?.(editingData.id);
           break;
         case 'PAYMENT':
           await onDeletePayment?.(editingData.id);
@@ -487,53 +582,50 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
           </div>
         </div>
         <div className="flex-1 overflow-x-auto overflow-y-auto">
-          <table className="w-full min-w-[700px] sm:min-w-[780px] text-left text-sm whitespace-nowrap">
+          <table className="w-full min-w-[620px] sm:min-w-[700px] text-left text-sm whitespace-nowrap">
             <thead className="bg-slate-50/80 text-slate-500 sticky top-0 z-10 border-b">
               <tr>
-                <th className="p-4 font-bold text-[10px] uppercase tracking-widest">
+                <th className="p-3 font-bold text-[10px] uppercase tracking-widest">
                   <button onClick={() => toggleSort('name')} className="flex items-center gap-1 hover:text-slate-700">
                     姓名
                     <span className="text-[9px] text-slate-300">{getSortIndicator('name')}</span>
                   </button>
                 </th>
-                <th className="p-4 font-bold text-[10px] uppercase tracking-widest">
+                <th className="p-3 font-bold text-[10px] uppercase tracking-widest">
                   <button onClick={() => toggleSort('age')} className="flex items-center gap-1 hover:text-slate-700">
                     目前年齡
                     <span className="text-[9px] text-slate-300">{getSortIndicator('age')}</span>
                   </button>
                 </th>
-                <th className="p-4 font-bold text-[10px] uppercase tracking-widest">
+                <th className="p-3 font-bold text-[10px] uppercase tracking-widest">
                   <button onClick={() => toggleSort('entry_date')} className="flex items-center gap-1 hover:text-slate-700">
                     入室日期
                     <span className="text-[9px] text-slate-300">{getSortIndicator('entry_date')}</span>
                   </button>
                 </th>
-                <th className="p-4 font-bold text-[10px] uppercase tracking-widest">
+                <th className="p-3 font-bold text-[10px] uppercase tracking-widest">
                   <button onClick={() => toggleSort('status')} className="flex items-center gap-1 hover:text-slate-700">
                     狀態
                     <span className="text-[9px] text-slate-300">{getSortIndicator('status')}</span>
                   </button>
                 </th>
-                <th className="p-4 font-bold text-[10px] uppercase tracking-widest text-right">管理</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredStudents.map(student => (
-                <tr key={student.id} className="hover:bg-indigo-50/30 transition-colors">
-                  <td className="p-4 font-bold text-slate-700">{student.name}</td>
-                  <td className="p-4 text-slate-500 font-medium">{calculateAge(student.birthday)}</td>
-                  <td className="p-4 text-slate-500 font-medium">{getEntryDate(student.id) || '-'}</td>
-                  <td className="p-4">
+                <tr
+                  key={student.id}
+                  className="hover:bg-indigo-50/30 transition-colors cursor-pointer"
+                  onClick={() => {
+                    setSelectedStudentId(student.id);
+                    router.push(buildStudentUrl(student.id, 'OVERVIEW'));
+                  }}
+                >
+                  <td className="p-3 font-bold text-slate-700">{student.name}</td>
+                  <td className="p-3 text-slate-500 font-medium">{calculateAge(student.birthday)}</td>
+                  <td className="p-3 text-slate-500 font-medium">{getEntryDate(student.id) || '-'}</td>
+                  <td className="p-3">
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${student.status === StudentStatus.ACTIVE ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>{student.status}</span>
-                  </td>
-                  <td className="p-4 text-right">
-                    <Link
-                      href={buildStudentUrl(student.id, 'OVERVIEW')}
-                      onClick={() => setSelectedStudentId(student.id)}
-                      className="text-indigo-600 hover:text-indigo-700 font-bold transition-colors"
-                    >
-                      查看詳情
-                    </Link>
                   </td>
                 </tr>
               ))}
@@ -553,12 +645,115 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
     .filter(a => a.student_id === selectedStudent.id)
     .sort((a, b) => b.assessed_at.localeCompare(a.assessed_at));
   const studentSlots = slots.filter(s => s.student_id === selectedStudent.id);
+  const studentSessions = sessions
+    .filter((s) => s.student_id === selectedStudent.id)
+    .sort((a, b) => {
+      if (a.session_date !== b.session_date) {
+        return a.session_date.localeCompare(b.session_date);
+      }
+      if (a.start_time !== b.start_time) {
+        return a.start_time.localeCompare(b.start_time);
+      }
+      return a.end_time.localeCompare(b.end_time);
+    });
   const latestAssessment = getLatestAssessment(selectedStudent.id);
   const latestCourseType = latestAssessment?.metrics?.course_type as CourseType | undefined;
   const recommendedSessions = latestCourseType ? COURSE_TYPE_SESSIONS[latestCourseType] : null;
+  const activeMonthRef = `${scheduleDate.getFullYear()}-${String(scheduleDate.getMonth() + 1).padStart(2, '0')}`;
+  const activeMonthHeading = `${scheduleDate.getFullYear()}年${String(scheduleDate.getMonth() + 1).padStart(2, '0')}月`;
+  const monthSessions = studentSessions.filter((session) =>
+    session.session_date?.startsWith(activeMonthRef),
+  );
+  const monthAttendedSessions = monthSessions.filter((session) => isAttendedSession(session.attendance));
+  const monthSessionsByDate = new Map<string, Session[]>();
+  for (const session of monthSessions) {
+    if (!session.session_date) continue;
+    const current = monthSessionsByDate.get(session.session_date) ?? [];
+    current.push(session);
+    monthSessionsByDate.set(session.session_date, current);
+  }
+  for (const [key, list] of monthSessionsByDate.entries()) {
+    monthSessionsByDate.set(
+      key,
+      list.slice().sort((a, b) => {
+        if (a.start_time !== b.start_time) return a.start_time.localeCompare(b.start_time);
+        return a.end_time.localeCompare(b.end_time);
+      }),
+    );
+  }
+
+  const year = scheduleDate.getFullYear();
+  const month = scheduleDate.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const leadingEmpty = (firstDay.getDay() + 6) % 7; // Monday first
+  const monthCalendarCells: Array<{ key: string; date: Date | null; dateKey: string | null }> = [];
+  for (let i = 0; i < leadingEmpty; i += 1) {
+    monthCalendarCells.push({ key: `empty-start-${i}`, date: null, dateKey: null });
+  }
+  for (let day = 1; day <= lastDay.getDate(); day += 1) {
+    const date = new Date(year, month, day);
+    monthCalendarCells.push({ key: toDateKey(date), date, dateKey: toDateKey(date) });
+  }
+  while (monthCalendarCells.length % 7 !== 0) {
+    monthCalendarCells.push({ key: `empty-end-${monthCalendarCells.length}`, date: null, dateKey: null });
+  }
+  const monthCalendarWeeks: Array<Array<{ key: string; date: Date | null; dateKey: string | null }>> = [];
+  for (let i = 0; i < monthCalendarCells.length; i += 7) {
+    monthCalendarWeeks.push(monthCalendarCells.slice(i, i + 7));
+  }
+
+  const handleBulkCreateCurrentWeek = async () => {
+    if (!onBulkCreateWeekSessions || isCreatingWeekSessions || isCreatingMonthSessions) return;
+    setIsCreatingWeekSessions(true);
+    try {
+      const weekStart = toDateKey(getWeekStartDate(scheduleDate));
+      const result = await onBulkCreateWeekSessions({
+        week_start: weekStart,
+        student_id: selectedStudent.id,
+      });
+      if ((result?.createdCount ?? 0) > 0) {
+        toast(`已加入 ${result.createdCount} 堂固定排課課程`, 'success');
+      } else {
+        toast('本週固定排課課程都已存在', 'success');
+      }
+    } catch (error) {
+      console.error('Failed to create week sessions:', error);
+      toast('加入課程失敗，請稍後再試。', 'error');
+    } finally {
+      setIsCreatingWeekSessions(false);
+    }
+  };
+
+  const handleBulkCreateCurrentMonth = async () => {
+    if (!onBulkCreateWeekSessions || isCreatingWeekSessions || isCreatingMonthSessions) return;
+    setIsCreatingMonthSessions(true);
+    try {
+      const weekStarts = getMonthWeekStartKeys(scheduleDate);
+      let createdCount = 0;
+      const lastIndex = weekStarts.length - 1;
+      for (const [index, weekStart] of weekStarts.entries()) {
+        const result = await onBulkCreateWeekSessions({
+          week_start: weekStart,
+          student_id: selectedStudent.id,
+        }, { reloadAfter: index === lastIndex });
+        createdCount += result?.createdCount ?? 0;
+      }
+      if (createdCount > 0) {
+        toast(`已加入 ${createdCount} 堂固定排課課程`, 'success');
+      } else {
+        toast('本月固定排課課程都已存在', 'success');
+      }
+    } catch (error) {
+      console.error('Failed to create month sessions:', error);
+      toast('加入課程失敗，請稍後再試。', 'error');
+    } finally {
+      setIsCreatingMonthSessions(false);
+    }
+  };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm h-full flex flex-col border border-slate-200 overflow-hidden relative">
+    <div className="h-full flex flex-col overflow-hidden relative">
       {modalType === 'STUDENT' && (
         <Modal title="編輯基本資料" onClose={closeModal} onSubmit={handleSave} onDelete={editingData?.id ? handleDelete : undefined}>
            <div className="grid grid-cols-2 gap-4">
@@ -632,6 +827,69 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
         </Modal>
       )}
 
+      {modalType === 'SESSION' && (
+        <Modal title={editingData?.id ? "編輯課程時段" : "新增課程（調課 / 補課）"} onClose={closeModal} onSubmit={handleSave} onDelete={editingData?.id ? handleDelete : undefined}>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 mb-1">上課日期</label>
+                <input
+                  type="date"
+                  value={editingData?.session_date || ''}
+                  onChange={e => setEditingData({ ...editingData, session_date: e.target.value })}
+                  className="w-full p-2 border rounded text-sm"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 mb-1">出席狀態</label>
+                <select
+                  value={editingData?.attendance || AttendanceStatus.UNKNOWN}
+                  onChange={e => setEditingData({ ...editingData, attendance: e.target.value })}
+                  className="w-full p-2 border rounded text-sm bg-white"
+                >
+                  {Object.values(AttendanceStatus).map((status) => (
+                    <option key={status} value={status}>{status}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 mb-1">開始時間</label>
+                <input
+                  type="time"
+                  value={editingData?.start_time || ''}
+                  onChange={e => setEditingData({ ...editingData, start_time: e.target.value })}
+                  className="w-full p-2 border rounded text-sm"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 mb-1">結束時間</label>
+                <input
+                  type="time"
+                  value={editingData?.end_time || ''}
+                  onChange={e => setEditingData({ ...editingData, end_time: e.target.value })}
+                  className="w-full p-2 border rounded text-sm"
+                  required
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 mb-1">備註</label>
+              <input
+                type="text"
+                value={editingData?.note || ''}
+                onChange={e => setEditingData({ ...editingData, note: e.target.value })}
+                className="w-full p-2 border rounded text-sm"
+                placeholder="例如：補課、調課、臨時改期"
+              />
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {modalType === 'PAYMENT' && (
         <Modal title={editingData?.id ? "編輯繳費" : "新增繳費"} onClose={closeModal} onSubmit={handleSave} onDelete={editingData?.id ? handleDelete : undefined}>
           <div className="space-y-4">
@@ -685,22 +943,23 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
       </div>
 
       <div className="flex border-b text-sm font-bold text-slate-400 bg-white sticky top-0 z-10 px-4">
-         {(['OVERVIEW', 'SCHEDULE', 'PAYMENTS', 'ASSESSMENTS'] as const).map(tab => (
+         {(['OVERVIEW', 'SCHEDULE', 'TIMETABLE', 'PAYMENTS', 'ASSESSMENTS'] as const).map(tab => (
            <Link
              key={tab}
              href={buildStudentUrl(selectedStudent.id, tab)}
              onClick={() => setActiveTab(tab)}
              className={`px-4 py-3 border-b-2 transition-all ${activeTab === tab ? 'border-indigo-600 text-indigo-600' : 'border-transparent hover:text-slate-600'}`}
            >
-             {tab === 'OVERVIEW' && '基本概覽'}
-             {tab === 'SCHEDULE' && '課程安排'}
-             {tab === 'PAYMENTS' && '繳費歷程'}
-             {tab === 'ASSESSMENTS' && '能力檢測'}
+             {tab === 'OVERVIEW' && '基本資訊'}
+             {tab === 'SCHEDULE' && '排課時段'}
+             {tab === 'TIMETABLE' && '課表'}
+             {tab === 'PAYMENTS' && '繳費'}
+             {tab === 'ASSESSMENTS' && '檢測'}
            </Link>
          ))}
       </div>
 
-      <div className="flex-1 overflow-auto p-4 md:p-6 bg-slate-50/30">
+      <div className="flex-1 overflow-auto p-1 md:p-1 bg-slate-50/30">
         {activeTab === 'OVERVIEW' && (
           <div className="max-w-4xl space-y-6">
             <div className="bg-white p-6 rounded-xl border shadow-sm">
@@ -823,6 +1082,188 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                   </div>
                 ))}
              </div>
+          </div>
+        )}
+
+        {activeTab === 'TIMETABLE' && (
+          <div className="space-y-4">
+            <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+              <button
+                type="button"
+                onClick={() => setScheduleMode('week')}
+                className={`rounded-lg px-4 py-2 text-sm font-bold transition-all ${
+                  scheduleMode === 'week' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                週課表
+              </button>
+              <button
+                type="button"
+                onClick={() => setScheduleMode('month')}
+                className={`rounded-lg px-4 py-2 text-sm font-bold transition-all ${
+                  scheduleMode === 'month' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                月課表
+              </button>
+            </div>
+
+            {scheduleMode === 'week' ? (
+              <ScheduleGrid
+                slots={studentSlots}
+                sessions={studentSessions}
+                students={[selectedStudent]}
+                currentDate={scheduleDate}
+                onWeekChange={setScheduleDate}
+                showTitle={false}
+                headerActions={
+                  <button
+                    type="button"
+                    onClick={handleBulkCreateCurrentWeek}
+                    disabled={!onBulkCreateWeekSessions || isCreatingWeekSessions || isCreatingMonthSessions}
+                    className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 transition-all hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isCreatingWeekSessions ? '加入中...' : '一鍵加入固定排課'}
+                  </button>
+                }
+                onSessionClick={(session) => {
+                  setEditingData({ ...session });
+                  setModalType('SESSION');
+                }}
+                onDeleteSession={async (session) => {
+                  const confirmed = window.confirm(`確定刪除 ${session.session_date} ${formatTimeRange(session.start_time, session.end_time)} 課程嗎？`);
+                  if (!confirmed) return;
+                  await onDeleteSession?.(session.id);
+                }}
+                onAddSession={(date, time) => {
+                  setEditingData({
+                    student_id: selectedStudent.id,
+                    session_date: date,
+                    start_time: time.start_time,
+                    end_time: time.end_time,
+                    attendance: AttendanceStatus.UNKNOWN,
+                  });
+                  setModalType('SESSION');
+                }}
+              />
+            ) : (
+              <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                <div className="border-b bg-slate-50 px-3 py-3 sm:px-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setScheduleDate(
+                          new Date(
+                            scheduleDate.getFullYear(),
+                            scheduleDate.getMonth() - 1,
+                            1,
+                          ),
+                        )
+                      }
+                      className="p-1.5 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-500 transition-all shadow-sm"
+                    >
+                      <ChevronLeftIcon className="w-4 h-4" />
+                    </button>
+                    <span className="text-xs font-bold text-slate-600 font-mono tracking-tight bg-white px-2.5 py-1 rounded-lg border border-slate-100 shadow-sm">
+                      {activeMonthHeading}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setScheduleDate(
+                          new Date(
+                            scheduleDate.getFullYear(),
+                            scheduleDate.getMonth() + 1,
+                            1,
+                          ),
+                        )
+                      }
+                      className="p-1.5 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-500 transition-all shadow-sm rotate-180"
+                    >
+                      <ChevronLeftIcon className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleBulkCreateCurrentMonth}
+                      disabled={!onBulkCreateWeekSessions || isCreatingWeekSessions || isCreatingMonthSessions}
+                      className="ml-auto rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 transition-all hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isCreatingMonthSessions ? '加入中...' : '一鍵加入固定排課'}
+                    </button>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-black text-emerald-700">
+                      本月總到課 {monthAttendedSessions.length} 堂
+                    </span>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <div className="min-w-[720px]">
+                    <div className="grid grid-cols-7 border-b bg-slate-50/80">
+                      {CALENDAR_WEEK_LABELS.map((label) => (
+                        <div key={label} className="border-r last:border-r-0 px-2 py-2 text-center text-[11px] font-black text-slate-500">
+                          週{label}
+                        </div>
+                      ))}
+                    </div>
+                    {monthCalendarWeeks.map((week, weekIndex) => (
+                      <div key={`week-${weekIndex}`} className="grid grid-cols-7 border-b last:border-b-0">
+                        {week.map((cell) => {
+                          if (!cell.date || !cell.dateKey) {
+                            return <div key={cell.key} className="min-h-[86px] border-r last:border-r-0 bg-slate-50/30" />;
+                          }
+                          const daySessions = monthSessionsByDate.get(cell.dateKey) ?? [];
+                          return (
+                            <div
+                              key={cell.key}
+                              className={`min-h-[86px] border-r last:border-r-0 p-2 ${daySessions.length > 0 ? 'bg-indigo-50/20' : 'bg-white'}`}
+                            >
+                              <div className="mb-1 text-xs font-black text-slate-700">{cell.date.getDate()}</div>
+                              <div className="space-y-1">
+                                {daySessions.slice(0, 3).map((session) => (
+                                  <button
+                                    key={session.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingData({ ...session });
+                                      setModalType('SESSION');
+                                    }}
+                                    className={`w-full truncate rounded border px-1.5 py-1 text-left text-[10px] font-bold ${getAttendancePillClass(session.attendance)}`}
+                                    title={`${formatTimeRange(session.start_time, session.end_time)} ${session.attendance}`}
+                                  >
+                                    {session.start_time}-{session.end_time}<br/>{session.attendance}
+                                  </button>
+                                ))}
+                                {daySessions.length > 3 && (
+                                  <div className="text-[10px] font-bold text-slate-400">+{daySessions.length - 3}</div>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingData({
+                                    student_id: selectedStudent.id,
+                                    session_date: cell.dateKey,
+                                    start_time: TIME_SLOTS[0].start_time,
+                                    end_time: TIME_SLOTS[0].end_time,
+                                    attendance: AttendanceStatus.UNKNOWN,
+                                  });
+                                  setModalType('SESSION');
+                                }}
+                                className="mt-1 w-full rounded border border-dashed border-slate-200 px-1.5 py-1 text-[10px] font-bold text-slate-400 hover:border-indigo-300 hover:text-indigo-600"
+                              >
+                                + 新增
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

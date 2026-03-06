@@ -1293,6 +1293,8 @@ export class DataService {
       anchorDate?: string;
       tz_offset?: number;
       tzOffset?: number;
+      student_id?: string;
+      studentId?: string;
     } = {},
     user?: { name?: string; sub?: string },
   ) {
@@ -1311,13 +1313,17 @@ export class DataService {
     const weekEnd = new Date(weekStart);
     weekEnd.setUTCDate(weekStart.getUTCDate() + 6);
     weekEnd.setUTCHours(23, 59, 59, 999);
+    const studentId = payload.student_id ?? payload.studentId;
 
     const [slots, existingSessions] = await Promise.all([
       this.prisma.scheduleSlot.findMany({
-        where: { student: { status: '進行中' } },
+        where: studentId
+          ? { student_id: studentId }
+          : { student: { status: '進行中' } },
       }),
       this.prisma.session.findMany({
         where: {
+          ...(studentId ? { student_id: studentId } : {}),
           session_date: {
             gte: weekStart,
             lte: weekEnd,

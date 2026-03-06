@@ -25,7 +25,15 @@ function CasesStudentsPanel() {
     updateSlot,
     deleteSlot,
   } = useSlots();
-  const { sessions, loading: sessionsLoading, error: sessionsError } = useSessions();
+  const {
+    sessions,
+    loading: sessionsLoading,
+    error: sessionsError,
+    createSession,
+    updateSession,
+    deleteSession,
+    createSessionsForWeek,
+  } = useSessions();
   const {
     payments,
     loading: paymentsLoading,
@@ -62,7 +70,7 @@ function CasesStudentsPanel() {
   }
 
   return (
-    <div className="p-3 md:p-4 space-y-4">
+    <div className="space-y-2">
       {loadError && (
         <div className="mb-4 text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-4 py-2">
           {loadError}
@@ -86,6 +94,10 @@ function CasesStudentsPanel() {
         onCreateAssessment={createAssessment}
         onUpdateAssessment={updateAssessment}
         onDeleteAssessment={deleteAssessment}
+        onCreateSession={createSession}
+        onUpdateSession={updateSession}
+        onDeleteSession={deleteSession}
+        onBulkCreateWeekSessions={createSessionsForWeek}
         onLogActivity={(category, action, description) =>
           logActivity(category, action, description)
         }
@@ -97,9 +109,7 @@ function CasesStudentsPanel() {
 export function CasesWorkspace() {
   return (
     <div className="h-full flex flex-col">
-      <div className="flex-1 overflow-auto bg-[var(--bg-base)] pb-20 md:pb-0">
         <CasesStudentsPanel />
-      </div>
     </div>
   );
 }

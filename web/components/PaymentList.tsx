@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { Assessment, CourseType, COURSE_TYPE_SESSIONS, Payment, PaymentMethod, PaymentStatus, Student, InvoiceStatus } from '../types';
 import { PlusIcon, XIcon, SearchIcon, FileTextIcon, ChevronLeftIcon } from './Icons';
 import { useToast } from './Toast';
@@ -71,6 +71,7 @@ export const PaymentList: React.FC<PaymentListProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [bulkCreating, setBulkCreating] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState('ALL');
+  const [savingStatusIds, setSavingStatusIds] = useState<Set<string>>(new Set());
   const currentMonth = useMemo(() => new Date().toISOString().slice(0, 7), []);
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(() => new Set([currentMonth]));
 
@@ -271,6 +272,35 @@ export const PaymentList: React.FC<PaymentListProps> = ({
       setBulkCreating(null);
     }
   };
+
+  const handleInlineStatusChange = useCallback(
+    async (payment: Payment, nextStatus: PaymentStatus) => {
+      if (!payment.id || payment.status === nextStatus || !onUpdatePayment) return;
+      setSavingStatusIds((prev) => {
+        const next = new Set(prev);
+        next.add(payment.id);
+        return next;
+      });
+      try {
+        await onUpdatePayment(payment.id, { status: nextStatus });
+        onLogActivity?.(
+          '繳費',
+          '修改繳費狀態',
+          `修改繳費狀態: ${payment.month_ref} ${getStudent(payment.student_id)?.name || '未知個案'} ${payment.status} -> ${nextStatus}`,
+        );
+      } catch (error) {
+        console.error('Failed to update payment status:', error);
+        toast('更新繳費狀態失敗。', 'error');
+      } finally {
+        setSavingStatusIds((prev) => {
+          const next = new Set(prev);
+          next.delete(payment.id);
+          return next;
+        });
+      }
+    },
+    [getStudent, onLogActivity, onUpdatePayment, toast],
+  );
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 h-full flex flex-col overflow-hidden relative">
@@ -510,7 +540,6 @@ export const PaymentList: React.FC<PaymentListProps> = ({
                         <thead className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest border-b">
                           <tr>
                             <th className="p-4">個案</th>
-                            <th className="p-4">類型</th>
                             <th className="p-4">堂數</th>
                             <th className="p-4">方式</th>
                             <th className="p-4">金額</th>
@@ -528,18 +557,33 @@ export const PaymentList: React.FC<PaymentListProps> = ({
                               return (
                                 <tr key={p.id} className="hover:bg-slate-50 transition-all">
                                   <td className="p-4 font-bold text-slate-700">{student?.name || '未知個案'}</td>
-                                  <td className="p-4 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-                                    {student?.type ? `${student.type} 類` : '-'}
-                                  </td>
                                   <td className="p-4 text-slate-600">{p.sessions_count || 0}</td>
                                   <td className="p-4 text-slate-600">{p.method || PaymentMethod.CASH}</td>
                                   <td className={`p-4 font-mono font-black ${isUnpaid ? 'text-red-600' : 'text-slate-800'}`}>
                                     ${p.amount.toLocaleString()}
                                   </td>
                                   <td className="p-4">
-                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${isUnpaid ? 'bg-red-50 text-red-600 border-red-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>
-                                      {p.status}
-                                    </span>
+                                    <select
+                                      value={p.status}
+                                      onChange={(event) =>
+                                        handleInlineStatusChange(
+                                          p,
+                                          event.target.value as PaymentStatus,
+                                        )
+                                      }
+                                      disabled={savingStatusIds.has(p.id)}
+                                      className={`rounded-full border px-2 py-0.5 text-[10px] font-bold outline-none transition-all ${
+                                        isUnpaid
+                                          ? 'bg-red-50 text-red-600 border-red-100'
+                                          : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                                      } ${savingStatusIds.has(p.id) ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+                                    >
+                                      {Object.values(PaymentStatus).map((status) => (
+                                        <option key={status} value={status}>
+                                          {status}
+                                        </option>
+                                      ))}
+                                    </select>
                                   </td>
                                   <td className="p-4 text-[10px] text-slate-500">{p.invoice_status || '未開立'}</td>
                                   <td className="p-4 text-right">
@@ -555,7 +599,7 @@ export const PaymentList: React.FC<PaymentListProps> = ({
                             })
                           ) : (
                             <tr>
-                              <td colSpan={8} className="p-6 text-center text-xs text-slate-400">
+                              <td colSpan={7} className="p-6 text-center text-xs text-slate-400">
                                 目前無繳費紀錄
                               </td>
                             </tr>
