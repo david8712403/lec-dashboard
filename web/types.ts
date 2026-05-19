@@ -81,9 +81,9 @@ export enum CourseType {
 }
 
 export const COURSE_TYPE_FEES: Record<CourseType, number> = {
-  [CourseType.HALF_ONE]: 4950,
-  [CourseType.HUNDRED_TWO]: 6600,
-  [CourseType.HUNDRED_THREE]: 9900,
+  [CourseType.HALF_ONE]: 5400,
+  [CourseType.HUNDRED_TWO]: 7200,
+  [CourseType.HUNDRED_THREE]: 10800,
 };
 
 export const COURSE_TYPE_SESSIONS: Record<CourseType, number> = {

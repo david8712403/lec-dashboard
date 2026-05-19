@@ -673,6 +673,7 @@ export class DataService {
         course_type: payload.course_type ?? null,
         grade: payload.grade ?? null,
         default_fee: payload.default_fee ?? null,
+        created_at: toUtcDateFromLocalDateString(payload.created_at) ?? undefined,
         status: payload.status ?? '待檢測',
         tags: payload.tags ?? [],
       },
@@ -691,6 +692,7 @@ export class DataService {
     if (payload.course_type !== undefined) data.course_type = payload.course_type;
     if (payload.grade !== undefined) data.grade = payload.grade;
     if (payload.default_fee !== undefined) data.default_fee = payload.default_fee;
+    if (payload.created_at !== undefined) data.created_at = toUtcDateFromLocalDateString(payload.created_at);
     if (payload.status !== undefined) data.status = payload.status;
     if (payload.tags !== undefined) data.tags = payload.tags;
 

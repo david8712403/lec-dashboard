@@ -358,6 +358,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
             await onCreateStudent?.({
               name: editingData.name,
               birthday: editingData.birthday,
+              created_at: editingData.created_at,
               phone: editingData.phone,
               type: editingData.type,
               grade: editingData.grade,
@@ -369,6 +370,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
             await onUpdateStudent?.(editingData.id, {
               name: editingData.name,
               birthday: editingData.birthday,
+              created_at: editingData.created_at,
               phone: editingData.phone,
               type: editingData.type,
               grade: editingData.grade,
@@ -527,6 +529,10 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
               <div>
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">生日</label>
                 <input type="date" value={editingData?.birthday || ''} onChange={e => setEditingData({...editingData, birthday: e.target.value})} className="w-full px-4 py-2 border rounded-lg text-sm" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">入室日期</label>
+                <input type="date" value={editingData?.created_at || ''} onChange={e => setEditingData({ ...editingData, created_at: e.target.value })} className="w-full px-4 py-2 border rounded-lg text-sm" />
               </div>
               <div>
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">類型</label>
@@ -759,6 +765,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
            <div className="grid grid-cols-2 gap-4">
              <div className="col-span-2"><label className="block text-[10px] font-black text-slate-400 mb-1">姓名</label><input type="text" value={editingData?.name} onChange={e => setEditingData({...editingData, name: e.target.value})} className="w-full p-2 border rounded text-sm" /></div>
              <div><label className="block text-[10px] font-black text-slate-400 mb-1">生日</label><input type="date" value={editingData?.birthday || ''} onChange={e => setEditingData({...editingData, birthday: e.target.value})} className="w-full p-2 border rounded text-sm" /></div>
+             <div><label className="block text-[10px] font-black text-slate-400 mb-1">入室日期</label><input type="date" value={editingData?.created_at || ''} onChange={e => setEditingData({ ...editingData, created_at: e.target.value })} className="w-full p-2 border rounded text-sm" /></div>
              <div><label className="block text-[10px] font-black text-slate-400 mb-1">聯絡電話</label><input type="text" value={editingData?.phone || ''} onChange={e => setEditingData({...editingData, phone: e.target.value})} className="w-full p-2 border rounded text-sm" /></div>
              <div>
                <label className="block text-[10px] font-black text-slate-400 mb-1">個案狀態</label>
